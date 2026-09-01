@@ -125,7 +125,7 @@ If any Critical or High finding is found, `apocalypse` exits with a non-zero cod
 
 **One step in your workflow — findings land in the GitHub Security tab (SARIF):**
 ```yaml
-- uses: zyx77550/sparda@main
+- uses: zakariagharzouli/sparda@main
   with:
     sarif: 'true'
 ```

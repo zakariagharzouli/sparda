@@ -159,7 +159,7 @@ what SPARDA is willing to claim without measuring did.
 ### Fixed
 
 - **The VS Code extension shipped a stub to the Marketplace.** `extensions/vscode/` was
-  published as `zyx77550.sparda@0.70.0` carrying one command whose entire body was
+  published as `zakariagharzouli.sparda@0.70.0` carrying one command whose entire body was
   `showInformationMessage('Audit command triggered! (Integration pending)')`. An outside
   reviewer read the manifest, read the source, and correctly called it a placeholder. A
   working extension already existed in `integrations/vscode/` — 135 tested lines, four

@@ -7,7 +7,7 @@
 - **GEMINI.md Contract**: Committed `GEMINI.md` to private HQ [b48c609](file:///C:/Users/zakwi/Developer/residual-labs-forge/SPARDA/sparda/GEMINI.md).
 - **Public Hardening**: Verified Actions settings require approval for fork pull request workflows, confirmed no `pull_request_target` workflows exist, added `CODEOWNERS` and strict branch protection on `main` (requires PR, Code Owner review, 4 CI matrix status checks, force-push and deletion blocked).
 - **Metadata Patch & Bump (v0.5.3)**: Added repository, homepage, and bugs fields to `package.json`, bumped version to `0.5.3`. Verified tests run 100% green. Pushed to `sparda-hq` [8faf3f7] and synchronized/pushed to `sparda` [9963fea].
-- **Profile README**: Updated `zyx77550/zyx77550` to list SPARDA in the active Residual Ecosystem.
+- **Profile README**: Updated `zakariagharzouli/zakariagharzouli` to list SPARDA in the active Residual Ecosystem.
 
 ## Not done / deferred
 - **npm publish**: Attempted `npm publish`, but failed due to OTP requirement (`npm error code EOTP`). Bypassed to Zak (as per `GEMINI.md` operating contract).

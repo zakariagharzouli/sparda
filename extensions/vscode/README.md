@@ -28,4 +28,4 @@ output — no telemetry, no network calls of its own.
 
 ---
 
-By [Residual Labs](https://residual-labs.fr) · [github.com/zyx77550/sparda](https://github.com/zyx77550/sparda) · BUSL-1.1
+By [Residual Labs](https://residual-labs.fr) · [github.com/zakariagharzouli/sparda](https://github.com/zakariagharzouli/sparda) · BUSL-1.1

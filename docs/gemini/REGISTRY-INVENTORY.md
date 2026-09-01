@@ -66,7 +66,7 @@ lives here as a first-class release row.
 
 | Field | Value |
 | --- | --- |
-| Repo / URL | **`github.com/zyx77550/sparda-skills`** |
+| Repo / URL | **`github.com/zakariagharzouli/sparda-skills`** |
 | What to sync | keep it aligned with this release (e.g. `SKILL.md` + skill assets, version/pitch) |
 | How | Gemini already knows the mechanism — **this row is just the reminder not to skip it** |
 | Trigger | every `npm publish` (same cadence as rows 1–11) |

@@ -3,7 +3,7 @@
 #
 #   mode: apocalypse (default) — prove the deploy, fail the job on any
 #   critical/high finding. Optionally upload SARIF to the Security tab.
-#     - uses: zyx77550/sparda@main
+#     - uses: zakariagharzouli/sparda@main
 #       with: { sarif: 'true' }
 #
 #   mode: review — comment the BEHAVIOR diff of the PR (which endpoints changed,
@@ -14,7 +14,7 @@
 #     permissions: { contents: read, pull-requests: write }
 #     - uses: actions/checkout@v4
 #       with: { fetch-depth: 0 }
-#     - uses: zyx77550/sparda@main
+#     - uses: zakariagharzouli/sparda@main
 #       with: { mode: 'review' }
 name: 'Sparda Security Gate'
 description: 'The trust layer for AI code: prove a deploy, diff PR behavior, and gate AI edits. 100% local, deterministic, no keys.'

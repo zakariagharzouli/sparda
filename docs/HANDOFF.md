@@ -1080,7 +1080,7 @@ bugs, both with regression tests. Full write-up: `docs/audit/2026-07-12-deep-aud
 Outreach execution (D1 & D2 tasks from GEMINI.md) based on the capability audit results.
 
 - **Prisma Disclosure**: Opened issue [#8560](https://github.com/prisma/prisma-examples/issues/8560) on `prisma/prisma-examples` to report unauthenticated writes.
-- **Flagship Blog Deployed**: Deployed the technical case study article to [residual-labs.fr/blog/proving-a-62k-star-repo](https://residual-labs.fr/blog/proving-a-62k-star-repo) (repo: `zyx77550/residual-labs-v1`).
+- **Flagship Blog Deployed**: Deployed the technical case study article to [residual-labs.fr/blog/proving-a-62k-star-repo](https://residual-labs.fr/blog/proving-a-62k-star-repo) (repo: `zakariagharzouli/residual-labs-v1`).
 - **First Awesome list PR**: Opened a pull request to add SPARDA under the Security section of `punkpeye/awesome-mcp-servers` at [pull/9867](https://github.com/punkpeye/awesome-mcp-servers/pull/9867). Opted in to fast-track agent merging via `🤖🤖🤖` tag.
 
 ## 🆕 This session, part 12 (2026-07-11) — the middle: ternary algebra + 1-byte capsule (ADR-036/037)
@@ -1121,7 +1121,7 @@ of all software, a network effect no fork can copy. Full thesis: `docs/COLLECTIV
   Tests: `tests/fingerprint.test.js` (8, incl. the load-bearing cross-repo portability),
   wrapper coverage in `command-smoke.test.js`. **438 tests green.**
 - **Bricks 2–3 + the conductor: DESIGNED** in the blueprint (antibody envelope re-keyed
-  by `behaviorHash` + signed; the git-repo genome `zyx77550/sparda-genome` with
+  by `behaviorHash` + signed; the git-repo genome `zakariagharzouli/sparda-genome` with
   pull-on-compile; install coherence via a progressive-disclosure conductor). None is a
   rewrite — bounded additions on shipped primitives (`seed`, `heal --check`, canonical hash).
 - **Autopilot reframed** (`docs/gemini/autopilot-corpus.md`): "run SPARDA on every public
@@ -1180,7 +1180,7 @@ write-up + reproduce steps: `docs/audit/2026-07-11-corpus-bughunt.md`.
 
 - **Merged PR #12** on the HQ repository, bringing main up to date with the PR review bot, stateful mirror, and audit fixes.
 - **Added exception in `gate-exceptions.json`** for the "shadow" verb false-positive in `src/flight/box.js:172` comment to clean the secret gate.
-- **Synchronized the open-core files** to the public repository `zyx77550/sparda@main` and pushed them successfully.
+- **Synchronized the open-core files** to the public repository `zakariagharzouli/sparda@main` and pushed them successfully.
 - **Enabled the self-review bot** on the public repository by creating `.github/workflows/sparda-review.yml`.
 - **Bumped MCP registry version** in `server.json` to 0.14.0 and synced it.
 - **Attempted `npm publish`** on the HQ repo; blocked by `E401 Unauthorized` on this local machine. Publishing is deferred to Zak.
@@ -1220,7 +1220,7 @@ the "give your AI safe hands" feature of the same story, organism visible second
   mirror keep-alive E-022, valve under-send ADR-029). `npm pack --dry-run` verified:
   `review.js`, `mirror.js`, `injection.js` all in the tarball.
 - **NOT published to npm** — publishing is the owner's irreversible step. Once this
-  branch lands on main: `npm publish`, and `zyx77550/sparda@main` `mode: review`
+  branch lands on main: `npm publish`, and `zakariagharzouli/sparda@main` `mode: review`
   goes live for anyone.
 
 ## 🆕 This session, part 5 (2026-07-10) — the PR review bot (R5/M3+M5, the growth loop)
@@ -1348,12 +1348,12 @@ _class_ of bug, not just the instance:
   - **Évaluation stratégique & technique (juin 2026)** : Pendant que Claude préparait confidentiellement le split open-core, Gemini et Zak ont collaboré sur des prompts d'évaluation pour interroger deux IA expertes (Claude Opus et Kimi VC). Les rapports détaillés, la synthèse d'analyse croisée, et les propositions techniques de correction (HMAC, SHA-256 salé, validation syntaxe/merge AST) ont été consignés localement (fichiers gitignored) dans [sparda_evaluation_opus_report.md](file:///c:/Users/zakwi/Developer/residual-labs-forge/SPARDA/sparda/scratch/sparda_evaluation_opus_report.md), [sparda_evaluation_kimi_report.md](file:///c:/Users/zakwi/Developer/residual-labs-forge/SPARDA/sparda/scratch/sparda_evaluation_kimi_report.md), [sparda_evaluation_cross_analysis.md](file:///c:/Users/zakwi/Developer/residual-labs-forge/SPARDA/sparda/scratch/sparda_evaluation_cross_analysis.md) et [sparda_evaluation_fixes_proposal.md](file:///c:/Users/zakwi/Developer/residual-labs-forge/SPARDA/sparda/scratch/sparda_evaluation_fixes_proposal.md). Les vulnérabilités ont été intégrées dans la roadmap.
   - Tests: 229/229 Vitest tests green (including new `invalidateCache` spine tests, 55 engine tests, 14 persistence tests, 56 sparda tests, 58 context-carrier tests, and 18 publish-gate tests).
 - **Public-Split and Hardening (v0.5.3)**:
-  - Created public open-core repository `zyx77550/sparda` with clean, squashed Git history.
+  - Created public open-core repository `zakariagharzouli/sparda` with clean, squashed Git history.
   - Implemented branch protection on `main` (requires PR, 1 approving review from Code Owner, 4 CI matrix status checks, force-push and deletion disabled).
   - Added CODEOWNERS file for critical paths.
   - Configured repository actions workflow permissions (requires approval for outside PR contributors).
   - Updated `package.json` with repository, homepage, and bugs metadata, and bumped version to `0.5.3`.
-  - Updated profile README `zyx77550/zyx77550` to list SPARDA in the Residual Ecosystem.
+  - Updated profile README `zakariagharzouli/zakariagharzouli` to list SPARDA in the Residual Ecosystem.
 - **Eval-driven hardening + real benchmark (2026-06-24, unreleased on `main`)** —
   acted on the external technical eval. Session record:
   `sessions/2026-06-24-eval-hardening-and-benchmark.md`.
@@ -1400,7 +1400,7 @@ _class_ of bug, not just the instance:
   record: `sessions/2026-06-24-lot-c-public-actions.md`. The HQ→public sync (run
   by Gemini) landed the community files + the 4 Lot B tooling configs on public
   `main` via PR #2 (squash-merged, all 5 checks green). Then, on public
-  `zyx77550/sparda`:
+  `zakariagharzouli/sparda`:
   - **First release tagged** — `v0.5.3` cut against `main`
     (`releases/tag/v0.5.3`). Kills the eval's "no releases" finding.
   - **`Lint & format` promoted to a required check** — branch protection now
@@ -1504,7 +1504,7 @@ _class_ of bug, not just the instance:
 2. **ADOPTION before monetization (owner call 2026-06-26).** No free users yet ⇒
    the paid tier waits. Session: `sessions/2026-06-26-adoption-mcp-registry-prep.md`.
    - **Official MCP registry — metadata PREPPED 2026-06-26.** `package.json` carries
-     `mcpName: io.github.zyx77550/sparda-mcp`; `server.json` (schema `2025-12-11`) is
+     `mcpName: io.github.zakariagharzouli/sparda-mcp`; `server.json` (schema `2025-12-11`) is
      schema-valid at repo root, points at the **public** repo + npm `sparda-mcp`,
      command `dev`. **Publish gated on the owner** (npm + GitHub auth) AND on npm
      carrying a version with `mcpName` — 4-step runbook in the session note. Honest

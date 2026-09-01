@@ -1,6 +1,6 @@
 {
   "name": "sparda",
-  "owner": { "name": "Residual Labs", "url": "https://github.com/zyx77550/sparda" },
+  "owner": { "name": "Residual Labs", "url": "https://github.com/zakariagharzouli/sparda" },
   "metadata": {
     "description": "SPARDA — the trust layer for AI-written code. AI writes. SPARDA proves.",
     "version": "0.1.0"

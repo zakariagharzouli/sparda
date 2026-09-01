@@ -33,7 +33,7 @@ unchanged (230/230 vitest + 10/10 router self-test; no code touched).
 
 ## Not done / deferred — owner actions on the PUBLIC repo
 - **First tag/release `v0.5.3`** — the eval's "no releases" finding is just the
-  squashed public mirror having no tags. Cut it on `zyx77550/sparda`.
+  squashed public mirror having no tags. Cut it on `zakariagharzouli/sparda`.
 - **Promote the optional `lint` check to required** in `main` branch protection
   (carried over from Lot B).
 - **Coverage badge + CI upload** — needs Codecov connected to the public repo

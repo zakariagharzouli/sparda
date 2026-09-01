@@ -26,7 +26,7 @@ positives) just good enough. Focus: the wedge "AI writes → SPARDA proves, in t
 ## Not done / deferred (needs accounts or credentials, not code — delegated)
 - **VS Code Marketplace publish** (Azure DevOps publisher + PAT + `vsce publish`) → brief handed to
   Gemini (`GEMINI-PUBLISH-VSCODE-AND-IDENTITY.md`).
-- **Public repo `zyx77550/sparda` About + topics** + delete the leftover branch
+- **Public repo `zakariagharzouli/sparda` About + topics** + delete the leftover branch
   `claude/new-session-cn4abd` → same Gemini brief (a Claude session already aligned the public repo's
   files but its tools/proxy blocked GitHub settings + branch delete).
 - **MCP registry re-publish** — NOT urgent: the live `latest` (0.67.0) already shows the new pitch;

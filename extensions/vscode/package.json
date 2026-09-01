@@ -4,11 +4,11 @@
   "description": "The trust layer for AI-written code. AI writes, SPARDA proves. Deterministic, offline behavior proofs + a live gate for AI edits, right in the editor.",
   "version": "0.71.3",
   "icon": "logo.png",
-  "publisher": "zyx77550",
+  "publisher": "zakariagharzouli",
   "license": "BUSL-1.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zyx77550/sparda-hq.git"
+    "url": "https://github.com/zakariagharzouli/sparda-hq.git"
   },
   "engines": {
     "vscode": "^1.85.0"

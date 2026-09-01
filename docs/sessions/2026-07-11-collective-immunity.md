@@ -29,7 +29,7 @@ router self-test · ESLint 0 / Prettier clean · **Version:** 0.15.0 prepared (n
 ## Not done / deferred (all designed, none a rewrite)
 - **Brick 2** — antibody envelope re-keyed by `behaviorHash`, signed, structure-only
   (extend `seed`; only `heal --check`-proven fixes ship).
-- **Brick 3** — `zyx77550/sparda-genome` git repo + pull-on-compile cache + opt-in push.
+- **Brick 3** — `zakariagharzouli/sparda-genome` git repo + pull-on-compile cache + opt-in push.
 - **The conductor** — progressive-disclosure install status over existing commands.
 - **The autopilot** — designed; NOT authorized to run (needs Zak's explicit go; outbound
   rules are law when it does).

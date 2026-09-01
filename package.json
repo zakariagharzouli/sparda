@@ -1,16 +1,16 @@
 {
   "name": "sparda-mcp",
   "version": "0.71.3",
-  "mcpName": "io.github.zyx77550/sparda-mcp",
+  "mcpName": "io.github.zakariagharzouli/sparda-mcp",
   "description": "AI writes. SPARDA proves. A deterministic, offline gate that catches when an AI edit removes a guard, exposes a route, or breaks an invariant \u2014 no API key, right in the agent edit loop.",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zyx77550/sparda.git"
+    "url": "git+https://github.com/zakariagharzouli/sparda.git"
   },
-  "homepage": "https://github.com/zyx77550/sparda#readme",
+  "homepage": "https://github.com/zakariagharzouli/sparda#readme",
   "bugs": {
-    "url": "https://github.com/zyx77550/sparda/issues"
+    "url": "https://github.com/zakariagharzouli/sparda/issues"
   },
   "bin": {
     "sparda": "src/index.js"

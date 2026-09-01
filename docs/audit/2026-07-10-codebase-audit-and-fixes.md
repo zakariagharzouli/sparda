@@ -1,6 +1,6 @@
 # Audit complet du codebase SPARDA — findings & correctifs
 
-**Date :** 2026-07-10 · **Portée :** HQ (`zyx77550/sparda-hq`) · **Branche :** `claude/new-session-5yhx6t`
+**Date :** 2026-07-10 · **Portée :** HQ (`zakariagharzouli/sparda-hq`) · **Branche :** `claude/new-session-5yhx6t`
 **Environnement :** Node v22 · **Suite :** 399 ✓ Vitest + 10/10 router self-test après correctifs
 **Méthode :** revue ciblée des surfaces critiques (bridge stdio, sécurité, réversibilité de
 l'injection, moteur/flywheel, templates de routeur, couverture de test), chaque point vérifié

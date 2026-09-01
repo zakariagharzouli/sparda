@@ -32,7 +32,7 @@ Brick 2 of collective immunity (ADR-035), on top of the behaviorHash (Brick 1) a
 ## Not done / deferred
 - **Brick 3 — the trust/policy layer:** issuer reputation, witness thresholds ("believe a
   verdict at N independent witnesses"), key rotation/revocation, and a curated public genome
-  repo (`zyx77550/sparda-genome`). The *mechanism* is shipped; the *policy* is next.
+  repo (`zakariagharzouli/sparda-genome`). The *mechanism* is shipped; the *policy* is next.
 - **`ab2` antibody** carrying the sanitized diagnosis + proven fix (from `heal --check`),
   keyed by the same behaviorHash — additive to `ab1`, not a rewrite.
 - A `recall`/lookup command (an agent asking the genome "is this shape known-bad?" before

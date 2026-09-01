@@ -150,7 +150,7 @@ probabilité en réparant chaque facteur de la boucle, dans l'ordre du levier.
 
 - **Métrique nord : repos actifs** = nombre de repos avec `.sparda/ubg.json` committé/mis à jour
   sur 7 jours glissants. PAS les downloads npm (vanity, pollués par les bots — voir §0bis).
-- **Métrique de distribution : GitHub views/uniques** (`gh api repos/zyx77550/sparda/traffic/views`,
+- **Métrique de distribution : GitHub views/uniques** (`gh api repos/zakariagharzouli/sparda/traffic/views`,
   gratuit, déjà disponible, cohérent avec la philosophie zéro-infra). Baseline 2026-07-17 : 41
   uniques/14j. Objectif J7 : x5 minimum via Show HN/PH.
 - Métriques de boucle : vues README → clones réels (proxy imparfait) → % qui génèrent un badge →

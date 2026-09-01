@@ -13,16 +13,16 @@ touched). **Commits:** this session · **Branch:** `main` (`sparda-hq`) ·
   catalogue** — it points at npm, doesn't host. npm is a first-class supported source.
   Requirements for an npm server: (1) an `mcpName` field in `package.json` (ownership
   marker), (2) a schema-valid `server.json`, (3) `mcp-publisher login` (GitHub namespace
-  proof) + `publish`. Namespace `io.github.zyx77550/*` is proven by logging into GitHub
-  as `zyx77550` — we own it. Total ≈ 1–2h, no code risk.
+  proof) + `publish`. Namespace `io.github.zakariagharzouli/*` is proven by logging into GitHub
+  as `zakariagharzouli` — we own it. Total ≈ 1–2h, no code risk.
 - **Added the ownership marker** — `package.json` now carries
-  `"mcpName": "io.github.zyx77550/sparda-mcp"` (always shipped in the npm tarball's
+  `"mcpName": "io.github.zakariagharzouli/sparda-mcp"` (always shipped in the npm tarball's
   package.json regardless of the `files` array).
 - **Wrote `server.json`** at repo root, schema `2025-12-11`, validated as JSON +
   matched field-for-field to the official npm example (`registryType`,
   `registryBaseUrl`, `transport.type:stdio`, `packageArguments:["dev"]`,
   two optional non-secret env vars `SPARDA_FLYWHEEL` / `SPARDA_RECORD_SEQUENCES`).
-  `repository.url` points at the **public** repo `github.com/zyx77550/sparda` (not HQ).
+  `repository.url` points at the **public** repo `github.com/zakariagharzouli/sparda` (not HQ).
 - **Full suite re-run 230/230** — additive metadata cannot affect tests; verified anyway
   (hard rule #9). `publish-gate.test.js` still 18/18.
 
@@ -43,8 +43,8 @@ ready either way.
    verifies the npm package at that version contains `mcpName`.
 2. **Install `mcp-publisher`** (Go binary; prebuilt release on the registry repo, or
    Homebrew on mac). See the canonical quickstart: modelcontextprotocol.io/registry/quickstart.
-3. **`mcp-publisher login github`** → browser auth as `zyx77550` (proves the
-   `io.github.zyx77550` namespace).
+3. **`mcp-publisher login github`** → browser auth as `zakariagharzouli` (proves the
+   `io.github.zakariagharzouli` namespace).
 4. **`mcp-publisher publish`** from the dir holding `server.json` → validates + lists it.
 
 ## Not done / next (the real adoption bricks, in order)

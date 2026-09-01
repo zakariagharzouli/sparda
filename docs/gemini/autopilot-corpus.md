@@ -27,7 +27,7 @@ Loop, at a steady polite cadence:
 - Pull a repo from a curated queue (popular Express/FastAPI/Next apps; start from
   awesome-lists, `topic:express` sorted by stars, framework example repos).
 - `git clone --depth 1` → `sparda apocalypse --json` + `sparda fingerprint --json`.
-- Record, in `zyx77550/sparda-genome` (or a staging file first): the **behaviorHashes**
+- Record, in `zakariagharzouli/sparda-genome` (or a staging file first): the **behaviorHashes**
   present, and for each finding its `{ behaviorHash, rule, severity }`. **Structure only —
   never source, never secrets** (this is `seed`'s law and hard rule #7). This is pure
   read-only analysis on your own machine; scale it freely (respect GitHub clone rate

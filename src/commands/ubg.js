@@ -40,7 +40,7 @@ export async function runUbg(opts) {
         `  ◐ 0 routes — SPARDA saw the framework but no route handlers. Run with --verbose,`,
       );
       console.log(
-        `    or open an issue with your layout: github.com/zyx77550/sparda/issues`,
+        `    or open an issue with your layout: github.com/zakariagharzouli/sparda/issues`,
       );
     }
   }

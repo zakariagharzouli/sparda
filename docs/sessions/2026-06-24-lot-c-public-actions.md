@@ -5,7 +5,7 @@ that the earlier "community files" session had deferred. The HQ→public sync (r
 by Gemini, not from here) landed the community files + the 4 Lot B tooling configs
 on public `main` via **PR #2**; this session verified that sync was leak-free,
 got its CI green, merged it, then performed the three remaining public actions on
-`zyx77550/sparda`. **HQ commits:** `9211609` (allowlist the Lot B configs +
+`zakariagharzouli/sparda`. **HQ commits:** `9211609` (allowlist the Lot B configs +
 scrub two HQ-only comments in `vitest.config.js`) → `9d296f4` (Codecov CI job),
 both pushed to `sparda-hq`. **Public:** PR #2 squash-merged
 (`678c34c`), release `v0.5.3` tagged. **Tests:** unchanged — 230/230 Vitest +
@@ -33,7 +33,7 @@ both pushed to `sparda-hq`. **Public:** PR #2 squash-merged
 - **Merged PR #2** — `--squash --admin` (solo founder ⇒ no second reviewer, but all
   required checks green), branch `sync/community` deleted. Merge commit `678c34c`.
 - **First public release tagged** — `gh release create v0.5.3 --target main` on
-  `zyx77550/sparda` (`releases/tag/v0.5.3`). Public-appropriate notes (what SPARDA
+  `zakariagharzouli/sparda` (`releases/tag/v0.5.3`). Public-appropriate notes (what SPARDA
   is, `npx sparda-mcp init|dev|remove`, highlights, BUSL-1.1). Kills the eval's
   "no releases" finding — `package.json` was already `0.5.3`.
 - **`Lint & format` promoted to required** — branch protection
@@ -43,13 +43,13 @@ both pushed to `sparda-hq`. **Public:** PR #2 squash-merged
 - **Codecov coverage job** — added a dedicated non-matrix `coverage` job to HQ
   `.github/workflows/ci.yml` (`9d296f4`): `npm run coverage` → lcov, then
   `codecov/codecov-action@v5` upload **gated to `github.repository ==
-  'zyx77550/sparda'`** (quiet on private HQ) with `fail_ci_if_error:false`
+  'zakariagharzouli/sparda'`** (quiet on private HQ) with `fail_ci_if_error:false`
   (report-only — no threshold gate yet, matching the vitest config). YAML validated,
   publish dry-run CLEAN.
 
 ## Not done / deferred — one owner step left
 - **Codecov OAuth (one-time, Zak).** Sign in at codecov.io with GitHub, authorise
-  `zyx77550/sparda` (public repo = tokenless, no secret to store). The coverage job
+  `zakariagharzouli/sparda` (public repo = tokenless, no secret to store). The coverage job
   reaches public on the **next HQ→public sync**; once the repo is connected, the
   README badge resolves. This is the only remaining Lot C item and it's gated on the
   owner — nothing more to code.

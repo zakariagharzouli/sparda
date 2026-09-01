@@ -16,7 +16,7 @@
 **The trust layer for AI-written backends.** SPARDA compiles your backend — routes, database queries, state mutations, guards, side-effects — into one deterministic behavior graph, then **statically proves what can and can't break before you ship**: no unguarded mutation, no broken invariant, no non-atomic aggregate write.
 
 [![npm](https://img.shields.io/npm/v/sparda-mcp)](https://www.npmjs.com/package/sparda-mcp)
-[![CI](https://github.com/zyx77550/sparda/actions/workflows/ci.yml/badge.svg)](https://github.com/zyx77550/sparda/actions/workflows/ci.yml)
+[![CI](https://github.com/zakariagharzouli/sparda/actions/workflows/ci.yml/badge.svg)](https://github.com/zakariagharzouli/sparda/actions/workflows/ci.yml)
 ![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![runtime deps](https://img.shields.io/badge/runtime%20deps-4%20pinned-4c1)
 [![license](https://img.shields.io/badge/license-BUSL--1.1-blue)](./LICENSE)
@@ -184,7 +184,7 @@ If any Critical or High finding is found, `apocalypse` exits with a non-zero cod
 **One step in your workflow — findings land in the GitHub Security tab (SARIF):**
 
 ```yaml
-- uses: zyx77550/sparda@main
+- uses: zakariagharzouli/sparda@main
   with:
     sarif: 'true'
 ```

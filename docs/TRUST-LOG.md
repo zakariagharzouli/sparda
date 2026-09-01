@@ -44,5 +44,5 @@ evasion variants are now regression-tested, and legitimate non-English descripti
 
 Found a case where SPARDA says `PROVEN` but a declared guard/invariant *can* be broken? That is
 the bug we care about most. Open an issue at
-[github.com/zyx77550/sparda](https://github.com/zyx77550/sparda/issues) with the smallest repro
+[github.com/zakariagharzouli/sparda](https://github.com/zakariagharzouli/sparda/issues) with the smallest repro
 you can — a false PROVEN jumps the queue.

@@ -275,7 +275,7 @@ function proveMarkdown({ verdict, report, findings, coverage, seal }) {
   }
   lines.push(
     '',
-    `<sub>Proven locally by [SPARDA](https://github.com/zyx77550/sparda) — deterministic, no keys · seal \`${seal}\`</sub>`,
+    `<sub>Proven locally by [SPARDA](https://github.com/zakariagharzouli/sparda) — deterministic, no keys · seal \`${seal}\`</sub>`,
   );
   return lines.join('\n');
 }

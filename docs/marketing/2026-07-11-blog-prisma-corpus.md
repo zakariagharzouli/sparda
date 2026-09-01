@@ -150,7 +150,7 @@ npx sparda-mcp apocalypse
 npx sparda-mcp review --base main
 ```
 
-Or drop the [GitHub Action](https://github.com/zyx77550/sparda) into your pipeline and
+Or drop the [GitHub Action](https://github.com/zakariagharzouli/sparda) into your pipeline and
 every pull request gets a behavior proof as a sticky comment — the risk named before
 it merges, not discovered after.
 
@@ -158,4 +158,4 @@ SPARDA is open-core, four exact-pinned dependencies, MIT-friendly to try. AI is 
 to keep writing more of your code. The question is whether anything proves it before
 it ships.
 
-**AI writes. SPARDA proves.** → [github.com/zyx77550/sparda](https://github.com/zyx77550/sparda)
+**AI writes. SPARDA proves.** → [github.com/zakariagharzouli/sparda](https://github.com/zakariagharzouli/sparda)

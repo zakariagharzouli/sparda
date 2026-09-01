@@ -751,7 +751,7 @@ ship — no rewrite, faithful to the 4-dep / host-never-pays / privacy laws:
   signed, sanitized, structure-only envelope — `seed.js` already exports exactly this
   shape of knowledge; this addresses + signs it. Only `heal --check`-proven fixes ship.
 - **Brick 3 (designed):** the genome as a public git repo of signed, content-addressed
-  antibody records (`zyx77550/sparda-genome` v0) — pull-on-compile cache (offline-first,
+  antibody records (`zakariagharzouli/sparda-genome` v0) — pull-on-compile cache (offline-first,
   nothing on the request path), opt-in push. Zero infra, git is already the storage layer.
 - **The conductor (designed):** install coherence via progressive disclosure — one status/
   next-step layer over existing commands, revealing each organ when it becomes useful,

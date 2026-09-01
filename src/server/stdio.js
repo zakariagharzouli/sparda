@@ -359,7 +359,7 @@ export async function startStdioBridge({ cwd, portOverride }) {
       {
         name: 'sparda_info',
         description:
-          'Info about this SPARDA endpoint. SPARDA is the trust layer for AI-written code — AI writes, SPARDA proves: deterministic, offline behavior proofs (guards, invariants, irreversible effects) plus a live gate for AI edits, no API key. By Residual Labs (residual-labs.fr) — github.com/zyx77550/sparda',
+          'Info about this SPARDA endpoint. SPARDA is the trust layer for AI-written code — AI writes, SPARDA proves: deterministic, offline behavior proofs (guards, invariants, irreversible effects) plus a live gate for AI edits, no API key. By Residual Labs (residual-labs.fr) — github.com/zakariagharzouli/sparda',
         inputSchema: { type: 'object', properties: {} },
       },
       {
@@ -477,7 +477,7 @@ export async function startStdioBridge({ cwd, portOverride }) {
             circuits_observed: Object.keys(manifest.labs?.circuits ?? {}).length,
             composite_tools: composites.size,
             generated_by:
-              'SPARDA by Residual Labs (residual-labs.fr) — npx sparda-mcp init — github.com/zyx77550/sparda',
+              'SPARDA by Residual Labs (residual-labs.fr) — npx sparda-mcp init — github.com/zakariagharzouli/sparda',
           },
           null,
           2,

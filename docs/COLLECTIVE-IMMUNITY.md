@@ -142,7 +142,7 @@ storage layer (CLAUDE.md). Flow:
   the genome repo (or a web-of-trust later) keeps poison out. Start conservative:
   curated merges, exactly like the open-core allowlist discipline.
 
-The v0 can literally begin as `zyx77550/sparda-genome` — a JSON-per-address repo that
+The v0 can literally begin as `zakariagharzouli/sparda-genome` — a JSON-per-address repo that
 every CLI pulls shallowly. Cost: 0.
 
 ## Why this is the 10000× (and it's physical, not a slogan)
@@ -196,5 +196,5 @@ commands (no new behavior in the organs). Scoped as the next brick after Brick 2
 1. **Brick 2** — antibody envelope re-keyed by `behaviorHash`, signed; extend `seed`.
 2. **Corpus at scale** feeds the genome (see `docs/gemini/autopilot-corpus.md`) — the
    scan's product is the genome, not spam.
-3. **Brick 3** — `zyx77550/sparda-genome` v0 + pull-on-compile.
+3. **Brick 3** — `zakariagharzouli/sparda-genome` v0 + pull-on-compile.
 4. **The conductor** — progressive-disclosure status layer.

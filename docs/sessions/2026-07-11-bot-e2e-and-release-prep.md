@@ -31,7 +31,7 @@ test covered), then prepare — not publish — the release that makes the bot l
 ## Not done / deferred (owner actions)
 - **`npm publish` of 0.14.0** — irreversible, owner's call. Until then the Action's
   `mode: review` resolves no `review` command on npm.
-- Merge PR #12 to main so `zyx77550/sparda@main` serves the new `action.yml`, then
+- Merge PR #12 to main so `zakariagharzouli/sparda@main` serves the new `action.yml`, then
   run the HQ→public sync (the valve now hard-fails on under-send, so
   `src/ubg/apocalypse.js` and friends will land).
 

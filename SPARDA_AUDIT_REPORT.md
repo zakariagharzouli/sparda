@@ -4,7 +4,7 @@
 > accompagnée d'une commande et d'un résultat réellement observé. Quand SPARDA
 > échoue, c'est écrit ; quand il réussit, c'est démontré.
 >
-> **Date :** 2026‑07‑22 · **Cible :** `sparda-mcp` v0.66.2 (dépôt `zyx77550/sparda`)
+> **Date :** 2026‑07‑22 · **Cible :** `sparda-mcp` v0.66.2 (dépôt `zakariagharzouli/sparda`)
 > · **Méthode :** exécution réelle de la CLI locale (`node src/index.js …`) sur
 > le code de la branche, sur des applications vulnérables construites pour
 > l'occasion, et sur une application open‑source réelle (ghostfolio, NestJS).

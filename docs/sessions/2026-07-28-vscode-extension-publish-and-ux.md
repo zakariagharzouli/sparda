@@ -20,7 +20,7 @@
 
 ## 5. Publications Officielles
 - **NPM** : Le paquet `sparda-mcp` v0.70.1 a été publié avec succès.
-- **VS Code Marketplace** : L'extension `zyx77550.sparda` v0.70.1 a été packagée et publiée en utilisant le PAT de l'éditeur (Publisher: Residual Labs).
+- **VS Code Marketplace** : L'extension `zakariagharzouli.sparda` v0.70.1 a été packagée et publiée en utilisant le PAT de l'éditeur (Publisher: Residual Labs).
 
 ## 6. UX et Brief Claude
 - **Problème Identifié** : Si `sparda-mcp` n'est pas installé, l'extension échoue avec une simple erreur texte. L'IA de VS Code, en tentant de l'installer dans un dossier temporaire, s'est heurtée à un faux fichier `package.json` contenant du code React.
@@ -37,7 +37,7 @@
   - `sparda gate --arm` : Fixe le comportement actuel comme la nouvelle référence stricte.
 
 **B. L'Interface (Extension VS Code)**
-- **Nom du paquet Marketplace** : `zyx77550.sparda`
+- **Nom du paquet Marketplace** : `zakariagharzouli.sparda`
 - **Chemin du code source** : `extensions/vscode/src/extension.cjs` (et `lib.cjs` pour le parsing).
 - **Fonctionnement** : L'extension est un "client stupide" et volontairement léger. Elle n'embarque **pas** le moteur d'analyse. Elle se contente de spawner le CLI local (`sparda-mcp`) en arrière-plan à chaque sauvegarde via `child_process.spawn`.
 - **Flux de données** : Elle parse la sortie JSON (`stdout`) du CLI et la convertit instantanément en `vscode.Diagnostic` (les lignes rouges/warnings dans l'éditeur), tout en déversant le texte de log (`stderr`) dans le panel "Output" de VS Code.

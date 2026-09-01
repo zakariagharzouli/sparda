@@ -8,7 +8,7 @@ after PR #12 merged) · **Tests:** untouched (no product code changed) · **SPAR
 
 ## Done
 - **Verified the release** end to end: `sparda-mcp@0.14.0` live on npm (latest),
-  public repo `zyx77550/sparda@main` on 0.14.0 with the review bot + self-review
+  public repo `zakariagharzouli/sparda@main` on 0.14.0 with the review bot + self-review
   workflow, MCP registry `server.json` at 0.14.0, `apocalypse.js` + `review.js`
   present in public. All aligned.
 - **Ran the corpus bug-hunt** on 4 real repos. Headline: **NOT PROVEN, 2 critical

@@ -49,6 +49,6 @@ GitHub Action that comments the behavior diff on every PR.
 
 ## Notes for the next session
 - When cutting the next release, confirm `sparda review` is in the published package so
-  `zyx77550/sparda@main` (the Action) resolves it.
+  `zakariagharzouli/sparda@main` (the Action) resolves it.
 - Optional polish: a tiny landing/GIF of the bot commenting, for the README top — the
   single most shareable artifact for M5.

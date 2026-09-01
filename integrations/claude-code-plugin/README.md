@@ -28,7 +28,7 @@ It is built to disappear when there's nothing to say:
 ## Install
 
 ```
-/plugin marketplace add zyx77550/sparda
+/plugin marketplace add zakariagharzouli/sparda
 /plugin install sparda-gate@sparda
 ```
 
@@ -49,4 +49,4 @@ passed as safe. It does not replace review or tests; it catches the one class of
 regression an LLM cannot reliably catch in itself: *did my own edit quietly remove a
 protection?*
 
-Full docs: https://github.com/zyx77550/sparda
+Full docs: https://github.com/zakariagharzouli/sparda

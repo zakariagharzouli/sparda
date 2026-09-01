@@ -113,7 +113,7 @@ jobs:
       # Tokenless upload works on the public mirror only; gated so the private
       # HQ run stays quiet. Never fails CI — coverage is report-only (no gate yet).
       - name: Upload coverage to Codecov
-        if: github.repository == 'zyx77550/sparda'
+        if: github.repository == 'zakariagharzouli/sparda'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage/lcov.info

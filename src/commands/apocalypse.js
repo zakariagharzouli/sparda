@@ -205,7 +205,7 @@ function toSarif(findings, canonical) {
         tool: {
           driver: {
             name: 'sparda-apocalypse',
-            informationUri: 'https://github.com/zyx77550/sparda',
+            informationUri: 'https://github.com/zakariagharzouli/sparda',
             rules: [...new Set(findings.map((f) => f.rule))].sort().map((id) => ({ id })),
           },
         },

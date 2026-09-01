@@ -32,7 +32,7 @@
 
 ### Publish & moat (this is the company's survival — treat as sacred)
 
-7. **The public repo `zyx77550/sparda` is OPEN-CORE ONLY.** Before ANY push to it,
+7. **The public repo `zakariagharzouli/sparda` is OPEN-CORE ONLY.** Before ANY push to it,
    run the **hard gate exactly as `tools/publish/RELEASE.md` §3 specifies** (the same
    `secret-gate` that returned CLEAN at the first split). **Any hit = STOP**, do not
    push, tell Zak.
@@ -55,7 +55,7 @@
 13. **A release is not done at `npm publish` — it ends when every listing is refreshed.**
     Right after publishing, walk **`docs/gemini/REGISTRY-INVENTORY.md` top to bottom** and update
     EVERY row to the new version/pitch. This explicitly includes **Row S — the skills repo
-    `github.com/zyx77550/sparda-skills`** (easy to forget: nothing else in HQ points at it) and the
+    `github.com/zakariagharzouli/sparda-skills`** (easy to forget: nothing else in HQ points at it) and the
     MCP registry manifest (`server.json` via `mcp-publisher`). The version numbers are already
     gate-enforced (`tests/release-sync.test.js` blocks a version-drifted manifest), so your manual
     job is the words + the pushes + the skills-repo sync — not the numbers.

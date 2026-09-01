@@ -106,7 +106,7 @@ export function detectStack(cwd) {
     if (known)
       throw err(
         `${known} detected — not supported yet. Express, NestJS, FastAPI & Flask in v0.`,
-        '+1 the framework vote: github.com/zyx77550/sparda/issues/1',
+        '+1 the framework vote: github.com/zakariagharzouli/sparda/issues/1',
       );
   }
   for (const f of ['requirements.txt', 'pyproject.toml']) {

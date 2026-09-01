@@ -204,7 +204,7 @@ npm publish                # prepublishOnly runs the gate; a failure here means 
 npm run publish:vscode     # @vscode/vsce@3.9.2, pinned — same tool as the workflow
 ```
 
-**VS Code specifics.** The extension is `zyx77550.sparda`, entry `./src/extension.cjs`, icon
+**VS Code specifics.** The extension is `zakariagharzouli.sparda`, entry `./src/extension.cjs`, icon
 `extensions/vscode/logo.png`. Keep the logo small (~111 KB) — a heavy asset bloats every
 install for nothing. Verify before publishing:
 

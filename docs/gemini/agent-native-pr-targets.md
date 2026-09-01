@@ -27,7 +27,7 @@ MCP lists; the Action/skill belong on Claude-ecosystem lists.
 
 ## The canonical entry (keep this constant across lists; adapt only the FORMAT)
 
-- **Link:** `[zyx77550/sparda](https://github.com/zyx77550/sparda)`
+- **Link:** `[zakariagharzouli/sparda](https://github.com/zakariagharzouli/sparda)`
 - **Language/scope/OS:** JavaScript/Node · Local · cross-platform (map to each list's
   legend — pick the JS/TS marker the list actually uses; 🏠 local; 🍎 🪟 🐧).
 - **Description (MCP lists) — current pitch:**
@@ -80,7 +80,7 @@ removes a guard, exposes a route, or breaks an invariant — no API key, in the 
 edit loop — and also proves deploys and PRs from a compiled behavior graph. Open-core,
 on npm as `sparda-mcp`, in the official MCP registry.
 
-- Repo: https://github.com/zyx77550/sparda
+- Repo: https://github.com/zakariagharzouli/sparda
 - Entry added in alphabetical order, following CONTRIBUTING.
 ```
 
