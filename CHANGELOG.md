@@ -9,6 +9,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.71.4]
+
+### Fixed
+
+- **Repository and metadata URLs updated to official GitHub location**
+  Corrected all repository, issues, and documentation URLs across npm and MCP registry manifests to point to `github.com/zakariagharzouli/sparda`.
+
 ## [0.71.3]
 
 ### Fixed
