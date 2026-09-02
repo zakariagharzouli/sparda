@@ -9,6 +9,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.71.5]
+
+### Changed
+
+- **Brand Kit v1.0 visual identity integration**
+  Integrated the official high-definition 1600x480 dark README banner with SPARDA Violet and Proof Lime palette, updated the VS Code extension icon to 512x512, and cleaned up legacy raster assets.
+
 ## [0.71.4]
 
 ### Fixed

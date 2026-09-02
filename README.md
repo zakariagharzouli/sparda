@@ -1,8 +1,6 @@
 # SPARDA
 
-<div align="center">
-  <img src="assets/logo-presentation.png" alt="SPARDA Banner" width="800" />
-</div>
+<div align="center">`r`n  <img src="https://raw.githubusercontent.com/zakariagharzouli/sparda/main/assets/sparda-readme-banner-dark-1600x480.png" alt="SPARDA — AI writes. SPARDA proves." width="800" />`r`n</div>
 
 <br/>
 
@@ -263,11 +261,6 @@ To undo everything: **`npx sparda-mcp remove`** restores your code byte-for-byte
 
 ## The promise — every word is backed by a test in CI
 
-<div align="center">
-  <img src="assets/features-presentation.png" alt="SPARDA Features" width="800" />
-</div>
-
-<br/>
 
 1. **Three minutes, one command.** AST scan, router generation, reversible injection — no config.
 2. **Try it for free, leave for free.** `npx sparda-mcp remove` restores your code **byte-for-byte** (tested on JS, TS, Python, even Windows CRLF files). No trace, no lock-in.
@@ -405,10 +398,5 @@ crippled to upsell you.
 You may not resell SPARDA or offer it as a competing commercial service.
 Each version converts to Apache 2.0 four years after its release.
 
-<div align="center">
-  <img src="assets/github-star.png" alt="Leave a Star" width="600" />
-</div>
-
-<br/>
 
 By [Residual Labs](https://residual-labs.fr)

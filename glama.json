@@ -1,6 +1,6 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "version": "0.71.4",
+  "version": "0.71.5",
   "maintainers": [
     "zakariagharzouli"
   ]
