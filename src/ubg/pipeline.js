@@ -14,6 +14,7 @@ import * as consistencyDomains from './passes/consistency-domains.js';
 import * as capabilities from './passes/capabilities.js';
 import * as resourceLifetimes from './passes/resource-lifetimes.js';
 import * as stateMachines from './passes/state-machines.js';
+import { certifyGraphPass } from './conservation.js';
 
 // SBIR §4 — normative order: reap, merge, type, classify, derive domains,
 // then the v1.2 derivations (capabilities, lifetimes, machines) which read
@@ -32,6 +33,7 @@ export const PASSES = [
 export function optimize(graph, { passes = PASSES } = {}) {
   const reports = [];
   for (const pass of passes) {
+    const before = { nodes: new Map(graph.nodes), edges: [...graph.edges] };
     const result = pass.run(graph);
     try {
       validateGraph(graph);
@@ -39,7 +41,9 @@ export function optimize(graph, { passes = PASSES } = {}) {
       err.message = `pass ${pass.name} broke the graph — ${err.message}`;
       throw err;
     }
-    reports.push({ pass: pass.name, ...result });
+    const passReport = { pass: pass.name, ...result };
+    passReport.conservation = certifyGraphPass(pass.name, before, graph, passReport);
+    reports.push(passReport);
   }
   return reports;
 }

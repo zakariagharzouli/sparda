@@ -42,6 +42,53 @@ export async function probeRoutes({
 
 // ── Express probe ─────────────────────────────────────────────────────────────
 
+// E-118 — SETTLING IS NOT DRAINING, and the two are not the same moment.
+//
+// The probe has FOUR ways to stop: the kill timer, the shim's `__done__` IPC
+// message, a child `error`, and the child's `close`. Only `close` implies the
+// stdio streams are finished. E-110 moved the settle off `exit` and onto `close`
+// and called the race fixed — it fixed ONE of the four.
+//
+// The one that actually fires is `__done__`. `express-shim.cjs` registers
+// `process.on('exit', sendDone)`, so an app that writes its error and calls
+// `process.exit(1)` sends `__done__` over the IPC channel while its stderr bytes
+// are still travelling down a DIFFERENT pipe. The parent settles on the message
+// and reads `stderrTail` before the `data` callback has run — measured 2-3 times
+// in 12 under CPU load, 0 in 8 idle, and reproducible with no test framework
+// involved at all.
+//
+// So the drain is applied to the SETTLE, not to one path into it. Bounded,
+// because a live app's stderr never ends on its own: the child is killed first,
+// which closes the pipe, and the grace is the honest cap on how long we wait for
+// bytes that may never come.
+export const DRAIN_GRACE_MS = 250;
+
+export function afterDrain(stream, graceMs, done) {
+  // No stream, or one that has already finished, is already drained. `done` is
+  // called synchronously there so the common path costs nothing.
+  if (!stream || stream.readableEnded || stream.destroyed) {
+    done();
+    return;
+  }
+  let fired = false;
+  let timer = null;
+  const finish = () => {
+    if (fired) return;
+    fired = true;
+    if (timer) clearTimeout(timer);
+    done();
+  };
+  timer = setTimeout(finish, graceMs);
+  // never hold the process open for a diagnostic
+  if (typeof timer.unref === 'function') timer.unref();
+  // `end` is emitted after every `data` has been emitted — that is the guarantee
+  // this function exists to buy. `close` and `error` are the ways it can finish
+  // without ever reaching `end`.
+  stream.once('end', finish);
+  stream.once('close', finish);
+  stream.once('error', finish);
+}
+
 async function probeExpress({ entryFile, projectRoot, timeoutMs }) {
   const ext = extname(entryFile);
 
@@ -85,19 +132,25 @@ async function probeExpress({ entryFile, projectRoot, timeoutMs }) {
       try {
         child && child.kill('SIGKILL');
       } catch {}
-      // Non-enumerable so `probeRoutes` keeps returning exactly an array of routes: every
-      // existing caller and assertion is untouched, and the reason travels with it.
-      Object.defineProperty(result, 'diagnostic', {
-        value: diagnose({
-          count: result.length,
-          shimPatched,
-          timedOut,
-          exitCode,
-          stderrTail,
-        }),
-        enumerable: false,
+      // E-118: the diagnostic is built AFTER the child's stderr has finished
+      // arriving, not at the instant something decided to stop. `diagnose` is
+      // called inside the callback for the same reason — `stderrTail` and
+      // `exitCode` are both still moving when a `__done__` message lands.
+      afterDrain(child?.stderr, DRAIN_GRACE_MS, () => {
+        // Non-enumerable so `probeRoutes` keeps returning exactly an array of routes: every
+        // existing caller and assertion is untouched, and the reason travels with it.
+        Object.defineProperty(result, 'diagnostic', {
+          value: diagnose({
+            count: result.length,
+            shimPatched,
+            timedOut,
+            exitCode,
+            stderrTail,
+          }),
+          enumerable: false,
+        });
+        resolve_(result);
       });
-      resolve_(result);
     }
 
     killTimer = setTimeout(() => {

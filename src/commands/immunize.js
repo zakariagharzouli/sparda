@@ -11,7 +11,7 @@ import { compileUBG } from '../ubg/compile.js';
 import { canonicalizeGraph } from '../ubg/schema.js';
 import { buildCapsule } from '../ubg/immunity.js';
 import { AXES } from '../ubg/polarity.js';
-import { premiseFor, basisFrom } from '../ubg/premise.js';
+import { certifiableOrgan, basisFrom } from '../ubg/premise.js';
 import { atomicWriteFileSync as atomicWrite } from '../server/persistence.js';
 
 export async function runImmunize(opts) {
@@ -21,7 +21,9 @@ export async function runImmunize(opts) {
   // result into a portable artifact — the strongest claim in the product, because it is the
   // one that leaves the repo. It printed an `UNMEASURED PREMISE` branch that no call path
   // could reach, because nothing ever told the capsule on what basis it was built.
-  const premise = await premiseFor(canonical, compiled.report, { cwd: opts.cwd });
+  const premise = await certifiableOrgan('immunize').premise(canonical, compiled.report, {
+    cwd: opts.cwd,
+  });
   const capsule = buildCapsule(canonical, { premiseBasis: basisFrom(premise) });
 
   if (opts.json) {

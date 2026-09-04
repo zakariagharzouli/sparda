@@ -25,6 +25,7 @@ import {
 } from './schema.js';
 import { isGuardLike, isNoOpGuard, scanFunction } from './extract.js';
 import { matcherCovers } from './nextjs.js';
+import { certifyConservation, graphFactInventory } from './conservation.js';
 
 // A global middleware only guards a route whose path its Next `config.matcher`
 // actually covers. No matcher → every path (Next default). A matcher present but
@@ -84,10 +85,30 @@ function guardFacts(name, scan, fn) {
   return { isGuard, verified: Boolean(scan?.guardSignals?.deniesWithStatus) };
 }
 
-export function translate({ framework, routes, globalMiddlewares, helpers, tables }) {
+export function translate({
+  framework,
+  routes,
+  globalMiddlewares,
+  helpers,
+  tables,
+  // Per-owner effect OCCURRENCES, collected as bodies are attached. The UBG
+  // effect node is a canonical OPERATION — two routes reaching the same DAO line
+  // legitimately share it, and re-keying it would merge or split effects across
+  // every downstream count and baseline (E-100). The occurrence is the other
+  // half: what THIS body proved about that operation, before dedup collapses it.
+  occurrences = [],
+}) {
   const graph = createGraph({ framework });
   const scanCache = new Map(); // nodeId -> scan result (a body is scanned once)
   const expanded = new Set(); // nodeIds whose body effects are already attached
+  const helperFacts = new Map();
+  const usedGlobalMiddlewares = new Set();
+  const sourceFacts = {
+    routes: sourceFactIds(routes, 'route'),
+    globalMiddlewares: sourceFactIds(globalMiddlewares, 'middleware'),
+    helpers: sourceFactIds(helpers, 'helper'),
+    tables: sourceFactIds(tables, 'table'),
+  };
 
   // ---- state layer: declared truth from SQL, one node per table
   for (const t of tables) {
@@ -163,12 +184,40 @@ export function translate({ framework, routes, globalMiddlewares, helpers, table
     );
     scanCache.set(id, scan);
     if (!helperByName.has(h.name)) helperByName.set(h.name, id);
+    helperFacts.set(sourceFacts.helpers.get(h), id);
   }
 
   // ---- routes: the behavior spine
   for (const route of routes) {
-    translateRoute(graph, route, globalMiddlewares, scanCache, helperByName, expanded);
+    translateRoute(
+      graph,
+      route,
+      globalMiddlewares,
+      scanCache,
+      helperByName,
+      expanded,
+      usedGlobalMiddlewares,
+      occurrences,
+    );
   }
+
+  // Fabric F1: translation is the first boundary where source facts become
+  // graph facts.  The certificate makes each source item either represented,
+  // explicitly merged, or explicitly lost with a reason — never absent by
+  // accident.  The graph inventory is listed as introduced output because it
+  // has no source-language identity before this boundary.
+  graph.meta.conservation = {
+    translate: translationCertificate({
+      graph,
+      routes,
+      globalMiddlewares,
+      helpers,
+      tables,
+      helperFacts,
+      usedGlobalMiddlewares,
+      sourceFacts,
+    }),
+  };
 
   return graph;
 }
@@ -180,6 +229,8 @@ function translateRoute(
   scanCache,
   helperByName,
   expanded,
+  usedGlobalMiddlewares,
+  occurrences = [],
 ) {
   const epId = entrypointId(route.method, route.path);
   addNode(
@@ -202,6 +253,7 @@ function translateRoute(
   // global middlewares run before route-level ones — same chain, lower order —
   // but only those whose matcher actually covers this route's path (E-NEXT-MW)
   const applicable = globalMiddlewares.filter((mw) => middlewareAppliesTo(mw, route));
+  for (const middleware of applicable) usedGlobalMiddlewares.add(middleware);
   const fullChain = [...applicable, ...route.chain];
   let prevId = epId;
   let order = 0;
@@ -254,7 +306,8 @@ function translateRoute(
   // respond)` — so the real DB work lives one slot before the end. All chain steps are
   // control-flow-reachable from the entrypoint, so the prover sees them wherever they sit.
   for (const cn of chainNodes) {
-    if (cn.scan) attachBody(graph, cn.id, cn.scan, helperByName, scanCache, expanded);
+    if (cn.scan)
+      attachBody(graph, cn.id, cn.scan, helperByName, scanCache, expanded, occurrences);
   }
 
   // G1 (O7/BOLA only): if any step on this route asserts caller-ownership at a call site
@@ -272,6 +325,114 @@ function translateRoute(
     graph.nodes.get(epId).meta.credentialGates = true;
   if (chainNodes.some((cn) => cn.scan?.credentialSignals?.redirects))
     graph.nodes.get(epId).meta.credentialRedirects = true;
+}
+
+function translationCertificate({
+  graph,
+  routes,
+  globalMiddlewares,
+  helpers,
+  tables,
+  helperFacts,
+  usedGlobalMiddlewares,
+  sourceFacts,
+}) {
+  const before = [];
+  const after = [];
+  const merged = [];
+  const lost = [];
+  const representedRoutes = new Map();
+  const representedTables = new Map();
+
+  for (const route of routes) {
+    const id = sourceFacts.routes.get(route);
+    before.push(id);
+    const graphId = entrypointId(route.method, route.path);
+    if (!graph.nodes.has(graphId))
+      throw new Error(`Fabric conservation: translation did not create ${id}`);
+    const prior = representedRoutes.get(graphId);
+    if (prior) {
+      merged.push({
+        id,
+        into: prior,
+        reason: 'same route identity maps to one UBG entrypoint',
+      });
+    } else {
+      representedRoutes.set(graphId, id);
+      after.push(id);
+    }
+  }
+
+  for (const table of tables) {
+    const id = sourceFacts.tables.get(table);
+    before.push(id);
+    const graphId = stateId('sql', table.name);
+    if (!graph.nodes.has(graphId))
+      throw new Error(`Fabric conservation: translation did not create ${id}`);
+    const prior = representedTables.get(graphId);
+    if (prior) {
+      merged.push({
+        id,
+        into: prior,
+        reason: 'same schema identity maps to one UBG state',
+      });
+    } else {
+      representedTables.set(graphId, id);
+      after.push(id);
+    }
+  }
+
+  for (const helper of helpers) {
+    const id = sourceFacts.helpers.get(helper);
+    before.push(id);
+    if (!helperFacts.has(id))
+      throw new Error(`Fabric conservation: translation did not create ${id}`);
+    after.push(id);
+  }
+
+  for (const middleware of globalMiddlewares) {
+    const id = sourceFacts.globalMiddlewares.get(middleware);
+    before.push(id);
+    if (usedGlobalMiddlewares.has(middleware)) after.push(id);
+    else {
+      lost.push({
+        id,
+        reason:
+          'global middleware applies to no extracted route under its declared scope',
+      });
+    }
+  }
+
+  const graphFacts = graphFactInventory(graph);
+  return certifyConservation({
+    pass: 'translate',
+    factsBefore: before,
+    factsAfter: [...after, ...graphFacts.map((fact) => fact.id)],
+    nodesIntroduced: graphFacts,
+    nodesMerged: merged,
+    informationLost: lost,
+    invariantsPreserved: ['every-source-fact-is-represented-merged-or-declared-lost'],
+  });
+}
+
+const sourceLoc = (value) =>
+  `${value.sourceFile ?? '<unknown>'}:${value.sourceLine ?? 0}`;
+function sourceFactIds(values, kind) {
+  const seen = new Map();
+  const base = (value) => {
+    if (kind === 'route')
+      return `${value.method.toUpperCase()}:${value.path}:${sourceLoc(value)}`;
+    if (kind === 'table') return `${value.name}:${sourceLoc(value)}`;
+    return `${value.name}:${sourceLoc(value)}`;
+  };
+  return new Map(
+    values.map((value) => {
+      const id = base(value);
+      const ordinal = seen.get(id) ?? 0;
+      seen.set(id, ordinal + 1);
+      return [value, `source:${kind}:${id}:${ordinal}`];
+    }),
+  );
 }
 
 // A chain step (middleware or handler) becomes a guard or logic node.
@@ -321,7 +482,15 @@ function ensureChainNode(graph, step, scanCache) {
 }
 
 // handler body → effect nodes (source order) + call edges into helper logic
-function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
+function attachBody(
+  graph,
+  ownerId,
+  scan,
+  helperByName,
+  scanCache,
+  expanded,
+  occurrences = [],
+) {
   if (expanded.has(ownerId)) return; // one body, one expansion
   expanded.add(ownerId);
   const owner = graph.nodes.get(ownerId);
@@ -334,6 +503,22 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
   // graph. Reading this tag can only DOWNGRADE a critical to advisory — never prove, never silence,
   // never fabricate a guard. Tagged once, on first expansion; the node is route-independent.
   if (owner) {
+    // Node Semantic Kernel: the continuations this body (and everything merged
+    // into it) runs later. Deterministically ordered so the graph stays
+    // byte-identical run to run.
+    if (scan.continuations?.length)
+      owner.meta.continuations = [...scan.continuations]
+        .sort(
+          (a, b) =>
+            a.line - b.line || cmp(a.form, b.form) || cmp(a.symbol ?? '', b.symbol ?? ''),
+        )
+        .filter(
+          (c, i, all) =>
+            i === 0 ||
+            c.line !== all[i - 1].line ||
+            c.form !== all[i - 1].form ||
+            c.symbol !== all[i - 1].symbol,
+        );
     if (scan.credentialSignals?.denies4xxOrThrows) owner.meta.bodyDenies = true;
     if (scan.credentialSignals?.verifyCall) owner.meta.bodyVerifies = true;
     if (scan.credentialSignals?.redirects) owner.meta.bodyRedirects = true;
@@ -343,6 +528,14 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
   let ordinal = 0;
   const created = []; // effects of THIS body — compensation pairs live here
   for (const eff of scan.effects) {
+    // E-099 — `eff.line` is a line in the body that PRODUCED the effect, and the resolver
+    // merges bodies from other files upward (controller → service → repository). The
+    // declaring file rides with the effect (`stampDeclaringFile`); the owner's file is the
+    // fallback for a body scanned outside the resolver, where the two are the same file.
+    // The node ID deliberately stays keyed on the OWNER's file: it is the per-owner dedup
+    // identity every downstream count and snapshot is built on, and re-keying it would
+    // silently merge effects across owners — a different change, with a different proof.
+    const effFile = eff.file ?? owner.loc.file;
     let id = effectId(eff.effectType, owner.loc.file, eff.line, ordinal++);
     // A shared service method reached under two different symbolic bindings
     // (`this.knex(this.collection)` as `:collection` vs `directus_activity`) lands two
@@ -352,13 +545,18 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
     const targetOf = (m) => m.table ?? m.target ?? null;
     while (graph.nodes.has(id) && targetOf(graph.nodes.get(id).meta) !== targetOf(eff))
       id = effectId(eff.effectType, owner.loc.file, eff.line, ordinal++);
+    // Whether this operation was ALREADY in the graph decides whether the block
+    // below is a merge or a no-op. Read before `addNode`, which returns the
+    // existing node and would otherwise make every first creation look like a
+    // reuse — and then re-add fields the meta construction deliberately omitted.
+    const alreadyPresent = graph.nodes.has(id);
     addNode(
       graph,
       makeNode(
         id,
         'effect',
         effectLabel(eff),
-        { file: owner.loc.file, line: eff.line },
+        { file: effFile, line: eff.line },
         {
           effectType: eff.effectType,
           ...(eff.op ? { op: eff.op } : {}),
@@ -384,6 +582,19 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
           // Advisory provenance — it enriches an UNGUARDED_MUTATION, never a finding of
           // its own (a per-function under-approximation can't see service-layer validation).
           ...(eff.tainted ? { tainted: true } : {}),
+          // DataSource → DbEffect (Node Semantic Kernel). Which request surfaces
+          // reached the FILTER and which reached the STORED DATA, kept apart
+          // because they answer different questions: a client-chosen filter is an
+          // object-scope question, a client-chosen payload a validation one.
+          // Provenance only — neither ever proves or disproves a guard.
+          // TAPP-0 rule 13: the field is ALWAYS present, because `null` (not
+          // measurable here) and `[]` (inspected, none found) are different
+          // answers and an absent key collapses them into one.
+          ...(eff.filterOrigins !== undefined
+            ? { filterOrigins: eff.filterOrigins }
+            : {}),
+          ...(eff.dataOrigins !== undefined ? { dataOrigins: eff.dataOrigins } : {}),
+          ...(eff.filterTainted ? { filterTainted: true } : {}),
           // guard-dominance (kills the C2 false PROVEN): this mutation runs BEFORE a guard that
           // follows it on the same body spine — i.e. it executes without having passed that check.
           ...(eff.bypassesGuard ? { bypassesGuard: true } : {}),
@@ -392,12 +603,16 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
           // access anywhere on its resolved path is a BOLA candidate (advisory).
           ...(eff.idScoped ? { idScoped: true } : {}),
           ...(eff.ownerScoped ? { ownerScoped: true } : {}),
-          // SBIR v1.1 §2.2 — transaction scope id is file-qualified here,
-          // where the owner's file is known
+          // SBIR v1.1 §2.2 — transaction scope id is file-qualified here, where the
+          // declaring file is known. It qualifies on the EFFECT's file, not the owner's:
+          // `txLine` is a line in the body that opened the scope, so owner-qualifying it
+          // made two different services' transactions that happen to start on the same
+          // line collapse into one id — O3 then read a multi-table write as atomic when
+          // nothing joined the two. Splitting them can only ADD a finding, never remove one.
           ...(eff.txLine != null
             ? {
                 transaction: {
-                  id: `tx:${owner.loc.file}:${eff.txLine}`,
+                  id: `tx:${effFile}:${eff.txLine}`,
                   isolation: eff.txIsolation ?? 'default',
                 },
                 onFailure: { action: 'rollback' },
@@ -406,7 +621,64 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
         },
       ),
     );
+    // A shared node keeps the FIRST body's meta (`addNode` returns the existing
+    // one). That is contamination: whichever route compiled first would decide
+    // what every other route "proved" about the same operation. Reusing a node
+    // therefore takes the MEET of the safety flags — a scope holds only if EVERY
+    // contributing body proved it — and the UNION of the request origins, since
+    // one more client-chosen origin can only widen an advisory. Both directions
+    // are the safe one.
+    const reused = alreadyPresent ? graph.nodes.get(id) : null;
+    if (reused && reused.meta.effectType === eff.effectType) {
+      if (!eff.ownerScoped) delete reused.meta.ownerScoped;
+      if (!eff.idScoped) delete reused.meta.idScoped;
+      const union = (key, incoming) => {
+        const seen = new Map(
+          [...(reused.meta[key] ?? []), ...(incoming ?? [])].map((o) => [
+            `${o.origin}:${o.name ?? '*'}`,
+            o,
+          ]),
+        );
+        if (seen.size)
+          reused.meta[key] = [...seen.entries()]
+            .sort((a, b) => cmp(a[0], b[0]))
+            .map(([, o]) => o);
+      };
+      union('filterOrigins', eff.filterOrigins);
+      union('dataOrigins', eff.dataOrigins);
+    }
     addEdge(graph, makeEdge('control_flow', ownerId, id, { order: order++ }));
+    // What THIS body proved, recorded before the shared node erases it. Two
+    // routes calling the same DAO method carry different taint seeds, so their
+    // scans differ — and everything that difference established used to be lost
+    // the moment the second one found the node id already taken.
+    if (eff.effectType === 'db_read' || eff.effectType === 'db_write')
+      occurrences.push({
+        owner: ownerId,
+        effect: id,
+        file: effFile,
+        line: eff.line,
+        access: eff.effectType === 'db_write' ? 'write' : 'read',
+        op: eff.op ?? null,
+        table: eff.table ?? null,
+        symbolicTarget: eff.symbolic === true,
+        filter: eff.where ?? null,
+        // `?? null`, never `?? []`: an unmeasured role must not arrive at the
+        // occurrence looking like an inspected-and-empty one.
+        filterOrigins: eff.filterOrigins ?? null,
+        dataOrigins: eff.dataOrigins ?? null,
+        // TAPP-1 rides on the OCCURRENCE, never on the shared effect node above:
+        // the node is one canonical operation and the path is what ONE route's
+        // body proved about it. Unioning them onto the node — the way the safety
+        // flags have to be — would be the provenance bleed the occurrence exists
+        // to prevent.
+        filterPaths: eff.filterPaths ?? null,
+        dataPaths: eff.dataPaths ?? null,
+        filterRequestDerived: eff.filterTainted === true,
+        dataRequestDerived: eff.tainted === true,
+        ownerScoped: eff.ownerScoped === true,
+        idScoped: eff.idScoped === true,
+      });
     created.push({ id, eff });
   }
 
@@ -431,7 +703,15 @@ function attachBody(graph, ownerId, scan, helperByName, scanCache, expanded) {
     // called helpers expand their own bodies (bounded: the set prevents re-entry)
     const calleeScan = scanCache.get(calleeId);
     if (calleeScan)
-      attachBody(graph, calleeId, calleeScan, helperByName, scanCache, expanded);
+      attachBody(
+        graph,
+        calleeId,
+        calleeScan,
+        helperByName,
+        scanCache,
+        expanded,
+        occurrences,
+      );
   }
 }
 

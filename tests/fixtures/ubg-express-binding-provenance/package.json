@@ -1,0 +1,8 @@
+{
+  "name": "ubg-express-binding-provenance",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "dependencies": {
+    "express": "4.21.0"
+  }
+}

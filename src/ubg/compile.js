@@ -19,6 +19,12 @@ import { linkDataFlow } from './link.js';
 import { optimize } from './pipeline.js';
 import { validateGraph } from './schema.js';
 import { serializeGraph, sourceHashOf, writeGraph } from './serialize.js';
+import { structuralCoverage } from './semantic-facts.js';
+import { canonicalizeGraph } from './schema.js';
+import { createLedger, certifyKernelConservation, ledgerFacts } from './kernel/facts.js';
+import { liftKernelFacts } from './kernel/lift.js';
+import { attachBoundaries } from './kernel/attach.js';
+import { CONTRACTS } from './kernel/contracts.js';
 
 export function compileUBG(
   cwd,
@@ -28,10 +34,34 @@ export function compileUBG(
 
   // --openapi: the universal lowering — no framework detection, ANY backend
   // that carries a spec enters the graph (Go, Java, Rails, .NET, whatever)
-  const stack = openapi ? { framework: 'openapi', entryFile: openapi } : detectStack(cwd);
+  const stack = openapi
+    ? {
+        framework: 'openapi',
+        entryFile: openapi,
+        detection: {
+          evidence: [
+            { kind: 'explicit-openapi', file: openapi, value: 'user-supplied spec' },
+          ],
+          alternativeCandidates: [],
+          contradictions: [],
+          coverage: {
+            framework: 'declared',
+            entry: 'declared',
+            entryCandidates: 1,
+            selected: openapi,
+            complete: true,
+          },
+          blindspots: [],
+        },
+      }
+    : detectStack(cwd);
+  // The Node Semantic Kernel ledger. Extraction records UnknownBoundary facts
+  // into it as the interprocedural walk stops; lifting derives the other four
+  // kinds from the compiled graph afterwards.
+  const kernel = createLedger();
   const extractors = {
-    express: () => extractExpress(cwd, stack.entryFile, { budgetMs }),
-    nestjs: () => extractNest(cwd, stack.entryFile),
+    express: () => extractExpress(cwd, stack.entryFile, { budgetMs, kernel }),
+    nestjs: () => extractNest(cwd, stack.entryFile, { kernel }),
     medusa: () => extractMedusa(cwd, stack.entryFile),
     strapi: () => extractStrapi(cwd, stack.entryFile),
     nextjs: () => extractNext(cwd, stack.entryFile),
@@ -55,7 +85,9 @@ export function compileUBG(
   const sqlNames = new Set(sql.tables.map((t) => t.name));
   const tables = [...sql.tables, ...prisma.tables.filter((t) => !sqlNames.has(t.name))];
 
+  const effectOccurrences = [];
   const graph = translate({
+    occurrences: effectOccurrences,
     framework: stack.framework,
     routes: extracted.routes,
     globalMiddlewares: extracted.globalMiddlewares,
@@ -69,18 +101,64 @@ export function compileUBG(
 
   const passReports = optimizePasses ? optimize(graph) : [];
 
+  // Fabric F2: every lowering already returns the structural surface it
+  // consumed (`routes`, declared unknown handlers, and skips).  Compare that
+  // surface to the final graph rather than trusting an extractor to remember
+  // to self-report what it lost.  A route reaped by a later pass is therefore
+  // unmeasured even though the extractor initially saw it.
+  const semanticCoverage = structuralCoverageFor(stack.framework, extracted, graph);
+
+  // Node Semantic Kernel. Lifting reads the CANONICAL graph — the same bytes
+  // every downstream consumer grades — so a kernel fact can never describe a
+  // program the prover did not see. The facts extraction already recorded
+  // (UnknownBoundary) are carried in, and conservation proves none was dropped
+  // on the way: `before` is what extraction produced, `after` is the full ledger.
+  const extractedFacts = ledgerFacts(kernel);
+  // The edge from a body to the stop it made. Stamped BEFORE lifting and before
+  // canonicalization, so the boundary travels with the node every downstream
+  // consumer already walks — the route-reachability question ("does this route
+  // depend on something SPARDA could not read?") then costs nothing new.
+  const boundaryAttachment = attachBoundaries(graph, kernel);
+  const lifted = liftKernelFacts(canonicalizeGraph(graph), {
+    ledger: kernel,
+    occurrences: effectOccurrences,
+    // Nest static direct provider V1 (ADR-102). Lifted here rather than emitted in
+    // the lowering because the fact names the EFFECT NODE when one exists, and the
+    // effect nodes only exist once the graph is built.
+    providerLinkages: extracted.providerLinkages ?? [],
+  });
+  const kernelConservation = certifyKernelConservation({
+    pass: 'lift',
+    before: extractedFacts,
+    after: lifted.facts,
+  });
+
   graph.meta = {
+    ...graph.meta,
     framework: stack.framework,
     entry: stack.entryFile,
     sourceHash: sourceHashOf(cwd, [
       ...extracted.scannedFiles,
       ...tables.map((t) => t.sourceFile),
     ]),
+    semanticCoverage: semanticCoverage.coverage,
+    detection: stack.detection,
   };
+
+  const structuralSkips = semanticCoverage.unmeasured
+    .map((fact) => semanticCoverage.unmeasuredMeta.get(fact.id))
+    .filter((fact) => fact?.origin === 'route')
+    .map((fact) => ({
+      reason: `unmeasured structural route: ${fact.method.toUpperCase()} ${fact.path} was parsed but did not survive into the final UBG`,
+      file: fact.source.file,
+      line: fact.source.line,
+      risk: 'high',
+    }));
 
   const report = {
     framework: stack.framework,
     entry: stack.entryFile,
+    detection: stack.detection,
     routes: extracted.routes.length,
     tables: tables.length,
     ...(prisma.tables.length ? { prismaTables: prisma.tables.length } : {}),
@@ -104,6 +182,7 @@ export function compileUBG(
             },
           ]
         : []),
+      ...structuralSkips,
     ],
     // registrations SPARDA saw but could not bind statically (computed verbs,
     // Reflect.apply, …) — each already carries a high-risk skipped twin, this is
@@ -111,11 +190,87 @@ export function compileUBG(
     ...(extracted.unknownHandlers?.length
       ? { unknownHandlers: extracted.unknownHandlers }
       : {}),
+    // The kernel travels in the REPORT rather than in the graph: the graph is
+    // hashed by the behavior fingerprint and pinned by the corpus snapshot, and
+    // a diagnostic ledger has no business moving either. Same rule PDE follows.
+    kernel: {
+      ...lifted.summary,
+      conservation: kernelConservation,
+      // The two populations, side by side and never averaged: stops that reached
+      // a body the graph carries (and can therefore gate a route), and stops that
+      // did not. Reporting only the first would over-claim the new guarantee.
+      attachment: boundaryAttachment,
+      contracts: {
+        modelled: CONTRACTS.filter((c) => c.modelled).map((c) => c.id),
+        declaredGaps: CONTRACTS.filter((c) => !c.modelled).map((c) => c.id),
+      },
+      facts: lifted.facts,
+    },
+    semanticCoverage: {
+      ledger: {
+        ...semanticCoverage,
+        // Internal origin metadata is used only to derive the declared skip
+        // above.  The public ledger stays language-neutral and serializable.
+        unmeasuredMeta: undefined,
+      },
+      unmeasured: semanticCoverage.unmeasured.length,
+    },
     counts: countGraph(graph),
   };
 
   const outPath = write ? writeGraph(graph, cwd, out) : null;
   return { graph, json: serializeGraph(graph), report, outPath };
+}
+
+function structuralCoverageFor(framework, extracted, graph) {
+  const parsedFacts = [];
+  const facts = new Map();
+  const exactFactIds = [];
+  const push = (origin, value, id, kind, source, extra = {}) => {
+    const fact = {
+      id,
+      kind,
+      language: framework,
+      source,
+    };
+    parsedFacts.push(fact);
+    facts.set(id, { origin, source, ...extra });
+    return id;
+  };
+
+  for (const [index, route] of (extracted.routes ?? []).entries()) {
+    const id = push(
+      'route',
+      route,
+      `structural:${framework}:route:${route.sourceFile ?? '<unknown>'}:${route.sourceLine ?? 0}:${route.method}:${route.path}:${index}`,
+      'route-registration',
+      { file: route.sourceFile ?? '<unknown>', line: route.sourceLine ?? 0 },
+      { method: route.method, path: route.path },
+    );
+    if (graph.nodes.has(`entrypoint:${route.method.toUpperCase()} ${route.path}`))
+      exactFactIds.push(id);
+  }
+  for (const [index, handler] of (extracted.unknownHandlers ?? []).entries()) {
+    push(
+      'unknown-handler',
+      handler,
+      `structural:${framework}:unknown-handler:${handler.file ?? '<unknown>'}:${handler.line ?? 0}:${handler.target ?? '<unknown>'}:${index}`,
+      'unresolved-registration',
+      { file: handler.file ?? '<unknown>', line: handler.line ?? 0 },
+    );
+  }
+  for (const [index, skipped] of (extracted.skipped ?? []).entries()) {
+    push(
+      'declared-skip',
+      skipped,
+      `structural:${framework}:skip:${skipped.file ?? '<unknown>'}:${skipped.line ?? 0}:${index}`,
+      'declared-skip',
+      { file: skipped.file ?? '<unknown>', line: skipped.line ?? 0 },
+    );
+  }
+
+  const ledger = structuralCoverage({ parsedFacts, claimedFactIds: exactFactIds });
+  return { ...ledger, unmeasuredMeta: facts };
 }
 
 function countGraph(graph) {

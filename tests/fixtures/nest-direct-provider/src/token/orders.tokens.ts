@@ -1,0 +1,1 @@
+export const ORDERS_SERVICE = 'ORDERS_SERVICE';

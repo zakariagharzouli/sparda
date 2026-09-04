@@ -1,0 +1,40 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "nodegoat-benefits-function-access",
+  "classification": "vulnerable",
+  "measurement": "scored",
+  "type": "broken-function-level-authorization",
+  "route": {
+    "method": "POST",
+    "path": "/benefits"
+  },
+  "scope": {
+    "status": "targeted-gap",
+    "reason": "The Express registration, the local middleware alias, the CommonJS constructor handler and the captured Mongo write are now linked: POST /benefits reaches db_write update on `users`. What remains unmodelled is the functional-role policy itself."
+  },
+  "origin": {
+    "repository": "OWASP/NodeGoat",
+    "url": "https://github.com/OWASP/NodeGoat",
+    "corpus": "nodegoat",
+    "appDir": ".",
+    "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+    "source": [
+      {
+        "path": "app/routes/index.js",
+        "sha256": "149ebc1e7e78e40ae3da739f44ae9d5c84d672826a652d822ec6ba33aae96d96",
+        "fingerprint": "3ab970b2888bc1501515db24a83cc7851ac9c09d00948c652300401515185eb5"
+      },
+      {
+        "path": "app/routes/benefits.js",
+        "sha256": "dc790b0b967d16750e75f8963061998a377a23351e88c2d2b8528a61e90c9e24",
+        "fingerprint": "bc5516b35ba21884915b88b3f810441e616f068d8a0cf756b143185d5aeda2d2"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "The upstream route file itself documents the missing admin guard as its function-level access-control vulnerability.",
+    "why": "POST /benefits has isLoggedIn but not isAdmin; updateBenefits accepts req.body.userId and updates that user."
+  },
+  "missCause": "Functional-role policy is not structurally modelled: SPARDA can see that POST /benefits carries isLoggedIn and writes `users`, but it holds no evidence of which ROLE the route should require, so the absent isAdmin is not a provable obligation. The captured Mongo write provenance named by the previous cause IS now modelled. The route stays an explicit UNKNOWN."
+}

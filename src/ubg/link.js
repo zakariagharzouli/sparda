@@ -7,8 +7,10 @@
 // node (meta.inferred: true) — the code says it exists, the schema hasn't
 // confirmed it, and that disagreement is itself a compiler finding.
 import { addEdge, addNode, makeEdge, makeNode, stateId } from './schema.js';
+import { certifyGraphPass } from './conservation.js';
 
 export function linkDataFlow(graph) {
+  const before = { nodes: new Map(graph.nodes), edges: [...graph.edges] };
   const report = { mutations: 0, reads: 0, inferredTables: [] };
 
   // canonical name → state node id (schema-declared tables first); Prisma
@@ -57,6 +59,7 @@ export function linkDataFlow(graph) {
   }
 
   report.inferredTables.sort();
+  report.conservation = certifyGraphPass('link', before, graph, report);
   return report;
 }
 

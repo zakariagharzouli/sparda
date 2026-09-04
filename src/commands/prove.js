@@ -9,14 +9,18 @@ import { compileUBG } from '../ubg/compile.js';
 import { canonicalizeGraph } from '../ubg/schema.js';
 import { checkGraph, verdictOf, verdictState, badgeFor } from '../ubg/apocalypse.js';
 import { surveyBlindspots, coveragePct } from '../ubg/blindspots.js';
-import { premiseFor, withPremiseGaps, basisFrom } from '../ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps, basisFrom } from '../ubg/premise.js';
 import { buildCapsule } from '../ubg/immunity.js';
 import { fingerprintGraph } from '../ubg/fingerprint.js';
+import { pdeSummaryForSparda } from '../ubg/pde.js';
 import { suggestAppDirs } from '../detect.js';
 import { readEnforceManifest } from './enforce.js';
 
 export async function runProve(opts) {
-  const { graph, report } = compileUBG(opts.cwd, { write: false, openapi: opts.openapi });
+  const { graph, report } = compileUBG(opts.cwd, {
+    write: false,
+    openapi: opts.openapi,
+  });
   const canonical = canonicalizeGraph(graph);
 
   const { findings, obligations } = checkGraph(canonical);
@@ -26,7 +30,7 @@ export async function runProve(opts) {
   // the public artifacts can never disagree about whether the app was fully seen; it
   // keeps the opt-in boundary — the runtime oracle executes the target's code and needs
   // `--probe`, the boot-free convention oracle only reads directories and always runs.
-  const premise = await premiseFor(canonical, report, {
+  const premise = await certifiableOrgan('prove').premise(canonical, report, {
     cwd: opts.cwd,
     probe: opts.probe,
   });
@@ -57,6 +61,16 @@ export async function runProve(opts) {
       .slice(0, 16);
 
   const state = verdictState(verdict);
+  // PDE is a diagnostic propagation layer: it exposes why a proof is blocked
+  // without becoming another verdict authority. Only verdictOf() can set the
+  // public verdict until a separately checkable proof kernel exists.
+  const pde = pdeSummaryForSparda({
+    premiseBasis: basisFrom(premise),
+    blindHigh: blind.byRisk.critical + blind.byRisk.high,
+    findings,
+    graph: canonical,
+    report,
+  });
   // The ENFORCED disclosure (ADR-076): when part of the proof rests on checks `sparda enforce`
   // synthesized, say so — an enforced proof is auditable and must never read as a silent bare
   // PROVEN. Disclosure only: the manifest can QUALIFY a PROVEN (strictly more information), it
@@ -66,6 +80,16 @@ export async function runProve(opts) {
 
   const summary = {
     app: path.basename(path.resolve(opts.cwd)) || 'app',
+    // WHAT THE NUMBERS BELOW WERE MEASURED OVER, stated before any of them (E-117).
+    // `routes: 0` reads as a fact about the APP; it is a fact about the FILE that was
+    // analysed, and those are the same sentence only when the right file was picked.
+    // A Flask project holding a stray `FastAPI(` file produced a well-formed
+    // `{"verdict":"NO_PROOF","routes":0}` — valid JSON, a legitimate verdict word, empty
+    // stderr, nothing to detect it by. Naming the entry turns an unfalsifiable claim into
+    // one a reader settles in a second: `routes: 0, entry: sub/api.py` on a Flask app.
+    framework: report.framework,
+    entry: report.entry,
+    detection: report.detection,
     verdict: state,
     routes: report.routes,
     guards: verdict.guards,
@@ -95,6 +119,7 @@ export async function runProve(opts) {
       entrypoint: f.entrypoint,
     })),
     counts: verdict.counts,
+    pde,
     capsuleBytes: capsule.bytes,
     behaviors: new Set(prints.map((p) => p.behaviorHash).filter(Boolean)).size,
     seal,
@@ -112,7 +137,13 @@ export async function runProve(opts) {
   // CLI (badgeFor), so the PR comment can never over-claim.
   if (opts.markdown) {
     console.log(
-      proveMarkdown({ verdict, report, findings, coverage: blind.coverage.ratio, seal }),
+      proveMarkdown({
+        verdict,
+        report,
+        findings,
+        coverage: blind.coverage.ratio,
+        seal,
+      }),
     );
     return gate(verdict);
   }
@@ -201,6 +232,12 @@ export async function runProve(opts) {
     console.log(
       `  0 routes resolved — nothing to prove (a parser-coverage gap, not a pass)`,
     );
+    // WHICH file produced that zero. "0 routes" invites the reader to conclude something
+    // about their app; the only thing measured is one file, and the two diverge exactly
+    // when entry detection picked the wrong one — the case that has no other symptom
+    // (E-117). Named before the monorepo hint, because "wrong file" and "wrong directory"
+    // are different problems and the first is the one this line can actually settle.
+    console.log(`  ◦ analysed as ${report.framework}, entry: ${report.entry}`);
     const dirs = suggestAppDirs(opts.cwd);
     if (dirs.length) {
       console.log(`  ◐ this looks like a monorepo — the app is in a sub-directory. Try:`);

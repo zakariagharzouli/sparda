@@ -16,6 +16,7 @@ const read = (f) => JSON.parse(fs.readFileSync(path.join(root, f), 'utf8'));
 const pkg = read('package.json');
 const server = read('server.json');
 const glama = read('glama.json');
+const vscode = read('extensions/vscode/package.json');
 
 describe('release sync: all registry manifests agree with package.json', () => {
   it('every version-bearing field equals the package version', () => {
@@ -25,6 +26,7 @@ describe('release sync: all registry manifests agree with package.json', () => {
       'server.json version': server.version,
       'server.json packages[0].version': server.packages[0].version,
       'glama.json version': glama.version,
+      'extensions/vscode/package.json version': vscode.version,
     };
     const drifted = Object.entries(fields).filter(([, v]) => v !== version);
     expect(
@@ -47,5 +49,37 @@ describe('release sync: all registry manifests agree with package.json', () => {
 
   it('the version is a clean semver (no pre-release cruft slips into a manifest)', () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+});
+
+describe('adversarial identity contract: platforms maintain distinct namespaces', () => {
+  it('strictly preserves the VS Code Marketplace publisher as zyx77550', () => {
+    expect(
+      vscode.publisher,
+      'extensions/vscode/package.json publisher must strictly remain zyx77550 (immutable marketplace publisher)',
+    ).toBe('zyx77550');
+  });
+
+  it('strictly points public GitHub repository URLs to zakariagharzouli/sparda', () => {
+    expect(pkg.repository.url).toBe('git+https://github.com/zakariagharzouli/sparda.git');
+    expect(pkg.homepage).toBe('https://github.com/zakariagharzouli/sparda#readme');
+    expect(pkg.bugs.url).toBe('https://github.com/zakariagharzouli/sparda/issues');
+    expect(server.repository.url).toBe('https://github.com/zakariagharzouli/sparda');
+    expect(vscode.repository.url).toBe('https://github.com/zakariagharzouli/sparda.git');
+  });
+
+  it('preserves MCP server namespace and Glama maintainer without blind renaming', () => {
+    expect(pkg.mcpName).toBe('io.github.zyx77550/sparda-mcp');
+    expect(server.name).toBe('io.github.zyx77550/sparda-mcp');
+    expect(glama.maintainers).toContain('zyx77550');
+  });
+
+  it('refuses accidental blind unification of distinct platform identities', () => {
+    // GitHub public owner is zakariagharzouli
+    // VS Code publisher is zyx77550
+    // MCP namespace contains zyx77550
+    // Glama maintainer is zyx77550
+    expect(pkg.repository.url).not.toContain('zyx77550/sparda.git');
+    expect(vscode.publisher).not.toBe('zakariagharzouli');
   });
 });

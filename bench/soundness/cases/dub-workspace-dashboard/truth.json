@@ -1,0 +1,38 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "dub-workspace-dashboard",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "indirect-workspace-authorization",
+  "route": {
+    "method": "POST",
+    "path": "/api/dashboards"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "The route and its effects are extracted, while its authorization is conveyed by an indirect withWorkspace helper."
+  },
+  "origin": {
+    "repository": "dubinc/dub",
+    "url": "https://github.com/dubinc/dub",
+    "corpus": "dub",
+    "appDir": "apps/web",
+    "commit": "bbc533ed6d0de62a9a23d2e7091da94f6c7b4db8",
+    "source": [
+      {
+        "path": "apps/web/app/api/dashboards/route.ts",
+        "sha256": "220dbd61b7a1fd49d0a471613c0d4c2e701745668b60716ed859c1e6e773aaac",
+        "fingerprint": "274cdb64b444a217699230ff105a97939d78aea34ef00e5074fbbbc8d8badb74"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "A mutation requiring workspace context and explicit links.write permission is safe for the tested unauthorized-mutation property.",
+    "why": "POST is wrapped in withWorkspace with requiredPermissions links.write and its Prisma writes use the resolved workspace and session identities."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

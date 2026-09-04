@@ -1,0 +1,38 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "cal-public-verification-email",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "rate-limited-public-verification",
+  "route": {
+    "method": "POST",
+    "path": "/verification/email/send-code"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "The Nest controller, write and external email effect are in the UBG; throttling is a deliberately difficult indirect guard."
+  },
+  "origin": {
+    "repository": "calcom/cal.com",
+    "url": "https://github.com/calcom/cal.com",
+    "corpus": "cal.com",
+    "appDir": ".",
+    "commit": "3894f37e14eae5082770f35ff1fde72110c0e6b6",
+    "source": [
+      {
+        "path": "apps/api/v2/src/modules/atoms/controllers/atoms.verification.controller.ts",
+        "sha256": "230d69c05da069fe35a30ae42860f8a9f34f6cd9fd5444d8340e1fd2b4305df6",
+        "fingerprint": "8131613fecd0327112de2772805096badaa92b760a58f643c8ba8e2da9b2ca0e"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "An email-verification-code issuance route is intentionally public when it is bounded by the endpoint's explicit throttle and does not grant authenticated access itself.",
+    "why": "sendEmailVerificationCode has an explicit limit of three calls per minute with a block duration, and returns only whether dispatch was attempted."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

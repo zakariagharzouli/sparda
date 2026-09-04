@@ -57,6 +57,7 @@ import { canonicalizeGraph } from '../src/ubg/schema.js';
 import { verdictOf, verdictState } from '../src/ubg/apocalypse.js';
 import { publishedCheck } from '../scripts/release-checks.mjs';
 import { presentationOf } from './helpers/vscode-lib.js';
+import { summarize } from '../bench/soundness/run.mjs';
 
 // A minimal graph with one entrypoint and one guarded mutation — enough for the verdict
 // machinery to have something to grade, so the rungs below are the only thing under test.
@@ -210,6 +211,45 @@ describe('the shape of the rule itself', () => {
   });
 });
 
+describe('private soundness bench: route recognition is never a made-up percentage', () => {
+  it('is expressibly unmeasured when no scored vulnerable route exists', () => {
+    const summary = summarize([
+      {
+        id: 'safe-only',
+        classification: 'safe',
+        measurement: 'scored',
+        route: 'POST /safe',
+        routeClaim: 'CLEAN',
+        routeVerdict: 'PROVEN',
+        observedEntrypoint: true,
+        linkedRoute: true,
+        hardFindings: [],
+      },
+    ]);
+    expect(summary.coverage.routeRecall).toBeNull();
+    expect(summary.coverage.linkedRouteRecall).toBeNull();
+  });
+
+  it('is reached through the real summary path once a vulnerable route is measured', () => {
+    const summary = summarize([
+      {
+        id: 'observed-vulnerable',
+        classification: 'vulnerable',
+        measurement: 'scored',
+        route: 'POST /danger',
+        routeClaim: 'UNKNOWN',
+        routeVerdict: 'UNKNOWN',
+        observedEntrypoint: true,
+        linkedRoute: true,
+        hardFindings: [],
+        missCause: 'test-only',
+      },
+    ]);
+    expect(summary.coverage.routeRecall).toBe(1);
+    expect(summary.coverage.linkedRouteRecall).toBe(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // § reachability — the half E-106 taught us. Every row above says the field CAN hold the
 // unmeasured state. These say a real call path DOES put it there.
@@ -263,6 +303,164 @@ describe('reachability: the unmeasured state is produced, not merely representab
       'src/commands/immunize.js',
       'src/commands/prove.js',
     ]);
+  });
+});
+
+describe('node kernel: a walk that recorded no stop is not a walk that saw everything', () => {
+  const fix = (n) => path.join(here, 'fixtures', n);
+
+  // EXPRESSIBLE — `complete` can hold the unmeasured state, and `true` is not in
+  // its range at all. Completeness of an interprocedural walk has no oracle here,
+  // while INCOMPLETENESS is proven by a single recorded stop; the field encodes
+  // that asymmetry instead of rounding a zero count up to "clean".
+  it('summarizeLedger can say "not proven complete", and can never say "complete"', async () => {
+    const { createLedger, makeFact, record, summarizeLedger } =
+      await import('../src/ubg/kernel/facts.js');
+    const ledger = createLedger();
+    record(
+      ledger,
+      makeFact(
+        'DbEffect',
+        'e1',
+        { access: 'write' },
+        { file: 'a.js', contract: 'mongo/driver' },
+      ),
+    );
+    expect(summarizeLedger(ledger).complete).toBeNull();
+    record(
+      ledger,
+      makeFact(
+        'UnknownBoundary',
+        'u1',
+        {},
+        { file: 'a.js', contract: 'node/resolve', uncertainty: 'unresolved-module' },
+      ),
+    );
+    expect(summarizeLedger(ledger).complete).toBe(false);
+  });
+
+  // REACHABLE — a real compile of a real fixture produces both states. Without
+  // this half, ADR-092's own lesson repeats: a field that can hold the honest
+  // value while nothing in the product ever writes it (E-106).
+  it('a real compile produces both the unproven and the proven-incomplete state', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const resolved = compileUBG(fix('node-kernel-express-mongo'), { write: false });
+    expect(resolved.report.kernel.complete).toBeNull();
+    expect(resolved.report.kernel.unknownBoundaries).toBe(0);
+
+    const stopped = compileUBG(fix('node-kernel-unknown'), { write: false });
+    expect(stopped.report.kernel.complete).toBe(false);
+    expect(stopped.report.kernel.unknownBoundaries).toBeGreaterThan(0);
+  });
+});
+
+describe('TAPP-1: an unreadable access path is null, never a path with no steps', () => {
+  const fix = (n) => path.join(here, 'fixtures', n);
+
+  // EXPRESSIBLE — the headline a reader acts on is `path`, and it can hold the
+  // admission itself. `[]` would be an ANSWER ("a journey with no steps"); only
+  // `null` says the journey is unreadable. The fact model refuses the other
+  // shapes at construction rather than trusting every consumer to notice.
+  it('the field holds null, and refuses a resolved path that states nothing', async () => {
+    const { makeFact } = await import('../src/ubg/kernel/facts.js');
+    const body = {
+      entrypoint: 'entrypoint:POST /a',
+      owner: 'logic:a.js#h:1',
+      effect: 'effect:db_write:a.js:2:0',
+      role: 'data',
+      source: { origin: 'body', name: 'email' },
+      state: 'unknown',
+      path: null,
+    };
+    const prov = {
+      file: 'a.js',
+      contract: 'node/dataflow',
+      uncertainty: 'unknown-access-path',
+    };
+    expect(makeFact('DataFlowPath', 'p1', body, prov).path).toBeNull();
+    // an `unknown` that carries steps, and a `resolved` that carries none, are
+    // both a headline saying more than the walk proved
+    expect(() => makeFact('DataFlowPath', 'p2', { ...body, path: [] }, prov)).toThrow();
+    expect(() =>
+      makeFact(
+        'DataFlowPath',
+        'p3',
+        { ...body, state: 'resolved', path: [] },
+        { ...prov, uncertainty: null },
+      ),
+    ).toThrow();
+  });
+
+  // REACHABLE — a real compile of a real fixture produces BOTH states. E-106 is
+  // exactly this row's other half going unwritten for a whole release.
+  it('a real compile produces both a stated path and a declared boundary', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const { report } = compileUBG(fix('tapp-access-paths'), { write: false });
+    const paths = (report.kernel?.facts ?? []).filter((f) => f.kind === 'DataFlowPath');
+    const resolved = paths.filter((f) => f.state === 'resolved');
+    const unknown = paths.filter((f) => f.state === 'unknown');
+    expect(resolved.length).toBeGreaterThan(0);
+    expect(unknown.length).toBeGreaterThan(0);
+    for (const f of resolved) expect(f.path.length).toBeGreaterThan(0);
+    for (const f of unknown) expect(f.path).toBeNull();
+  });
+});
+
+describe('TAPP across a Nest provider: an unestablished ROLE is null, never a guess', () => {
+  const fix = (n) => path.join(here, 'fixtures', n);
+
+  // A NEW headline field, so a new row (ADR-104). `role` is what a reader acts
+  // on — "the client chose this FILTER" and "the client wrote this PAYLOAD" are
+  // different problems, and the two ORMs put them at opposite argument
+  // positions. A refused journey has no role, and the honest value is `null`:
+  // defaulting to `data` or `filter` would name a role the table never
+  // established, which is the shape rule 13 exists to forbid.
+  //
+  // EXPRESSIBLE — the fact model accepts the admission in the field itself.
+  it('the role field holds null on a declared journey', async () => {
+    const { makeFact } = await import('../src/ubg/kernel/facts.js');
+    const f = makeFact(
+      'DataFlowPath',
+      'r1',
+      {
+        entrypoint: 'entrypoint:POST /a',
+        owner: null,
+        effect: null,
+        role: null,
+        source: { origin: 'body', name: null },
+        state: 'unknown',
+        path: null,
+        refusal: 'a reason',
+      },
+      {
+        file: 'a.ts',
+        contract: 'nest/provider-tapp',
+        uncertainty: 'unknown-access-path',
+      },
+    );
+    expect(f.role).toBeNull();
+    expect(f.path).toBeNull();
+  });
+
+  // REACHABLE — a real compile of a real fixture produces it, on a route whose
+  // ORM operation IS proved and whose argument position the role table does not
+  // cover (`repo.remove(dto)`). E-106 is this half going unwritten.
+  it('a real compile produces a roleless declared journey, beside stated ones', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const { report } = compileUBG(fix('nest-provider-tapp'), { write: false });
+    const own = (report.kernel?.facts ?? []).filter(
+      (f) => f.provenance?.contract === 'nest/provider-tapp',
+    );
+    const unknown = own.filter((f) => f.state === 'unknown');
+    const resolved = own.filter((f) => f.state === 'resolved');
+    expect(resolved.length).toBeGreaterThan(0);
+    expect(unknown.length).toBeGreaterThan(0);
+    for (const f of unknown) {
+      expect(f.role).toBeNull();
+      expect(f.path).toBeNull();
+      expect(f.destination).toBeNull();
+    }
+    for (const f of resolved) expect(f.role === 'filter' || f.role === 'data').toBe(true);
   });
 });
 
@@ -353,5 +551,82 @@ describe('the gate: abstaining is not passing (ADR-092)', () => {
     expect(abstain.length).toBeGreaterThan(0);
     for (const line of abstain) expect(line).not.toMatch(/ok:\s*true/);
     expect(src).toMatch(/ok: null, abstained: err\.message/);
+  });
+});
+
+describe('the strict Nest chain: an unproved link makes the RECEIPT null, never a partial one', () => {
+  const fix = (n) => path.join(here, 'fixtures', n);
+
+  // A NEW headline field, so a new row (ADR-106). `strict` is what a reader acts
+  // on: a non-null receipt says "this route provably reaches this ORM operation
+  // through this exact Nest binding". The tempting wrong shape is a receipt with
+  // some links filled and others `null` inside it — that reads as a proof with
+  // detail missing, when it is not a proof at all. So the admission lives in the
+  // RECEIPT, not in its links: eight links or nothing.
+  //
+  // EXPRESSIBLE — the fact model accepts `strict: null` on a real linkage body.
+  it('a ProviderLinkage holds null in the strict field', async () => {
+    const { makeFact } = await import('../src/ubg/kernel/facts.js');
+    const f = makeFact(
+      'ProviderLinkage',
+      'sc1',
+      {
+        entrypoint: 'entrypoint:GET /a',
+        controller: 'C.m',
+        provider: 'S.m',
+        orm: 'typeorm',
+        pkg: '@nestjs/typeorm',
+        op: 'find',
+        entity: 'E',
+        entityFile: null,
+        effect: null,
+        basis: 'module-literal',
+        strict: null,
+      },
+      { file: 'a.ts', line: 1, symbol: 'S.find', contract: 'nest/provider' },
+    );
+    expect(f.strict).toBeNull();
+  });
+
+  // REACHABLE — a real compile of a real fixture produces BOTH states, on the
+  // SAME fact kind. E-106 is exactly this half going unwritten for a release.
+  it('a real compile produces both a stated receipt and a null one', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const { report } = compileUBG(fix('nest-direct-provider'), { write: false });
+    const links = (report.kernel?.facts ?? []).filter(
+      (f) => f.kind === 'ProviderLinkage',
+    );
+    const proved = links.filter((f) => f.strict);
+    const nulled = links.filter((f) => f.strict === null);
+    expect(proved.length).toBeGreaterThan(0);
+    expect(nulled.length).toBeGreaterThan(0);
+    // And the receipt is never PARTIAL: every link of a stated receipt is present.
+    for (const f of proved)
+      for (const k of [
+        'route',
+        'field',
+        'identity',
+        'binding',
+        'method',
+        'handle',
+        'operation',
+      ])
+        expect(f.strict[k]).toBeTruthy();
+  });
+
+  // The refusal must be DECLARED, not merely absent — a `null` receipt with no
+  // boundary anywhere is indistinguishable from a chain nobody looked at.
+  it('a refused chain leaves a named cause behind it', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const { report } = compileUBG(fix('nest-strict-chain'), { write: false });
+    const declined = (report.kernel?.facts ?? []).filter(
+      (f) =>
+        f.kind === 'UnknownBoundary' && f.provenance.contract === 'nest/strict-chain',
+    );
+    expect(declined.length).toBeGreaterThan(0);
+    for (const d of declined) {
+      expect(d.detail).toBeTruthy();
+      expect(d.provenance.uncertainty).toBe('unresolved-provider');
+    }
   });
 });

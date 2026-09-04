@@ -1,6 +1,8 @@
 # SPARDA
 
-<div align="center">`r`n  <img src="https://raw.githubusercontent.com/zakariagharzouli/sparda/main/assets/sparda-readme-banner-dark-1600x480.png" alt="SPARDA — AI writes. SPARDA proves." width="800" />`r`n</div>
+<div align="center">
+  <img src="assets/sparda-readme-banner-dark-1600x480.png" alt="SPARDA — AI writes. SPARDA proves." width="800" />
+</div>
 
 <br/>
 
@@ -156,14 +158,11 @@ npx sparda-mcp apocalypse
 ```
 
 This command reads the compiled `.sparda/ubg.json` (with zero source code parsing at runtime) and discharges five static correctness obligations:
-
-- **Unguarded Mutation (Critical)**: Flags any mutation path that does not cross a security `guard`.
-- **Non-Atomic Aggregate Write (High)**: Flags when an API writes to multiple tables of the same Consistency Domain (Aggregate) outside a single transaction scope.
-- **Unvalidated Constrained Write (Medium)**: Flags writes into columns with declared invariants (CHECK, NOT NULL, UNIQUE — parsed from your `.sql` DDL **or `schema.prisma`**, Prisma enums included) without prior validation (Zod/Pydantic).
-- **Irreversible Observable Effect (High)**: Flags out-of-process actions (like Stripe charges) that happen alongside state writes without a structural compensation path (like a catch-refund).
-- **Taint Flow Analysis (High)**: Tracks untrusted input variables through the AST to ensure they do not corrupt critical sinks.
-- **Guard Dominance (Medium)**: Proves that top-level security guards cannot be bypassed by nested or overlapping sibling routes.
-- **Aggregate Member Bypass (Info)**: Flags mutating a member table directly without routing through the aggregate root.
+* **Unguarded Mutation (Critical)**: Flags any mutation path that does not cross a security `guard`.
+* **Non-Atomic Aggregate Write (High)**: Flags when an API writes to multiple tables of the same Consistency Domain (Aggregate) outside a single transaction scope.
+* **Unvalidated Constrained Write (Medium)**: Flags writes into columns with declared invariants (CHECK, NOT NULL, UNIQUE — parsed from your `.sql` DDL **or `schema.prisma`**, Prisma enums included) without prior validation (Zod/Pydantic).
+* **Irreversible Observable Effect (High)**: Flags out-of-process actions (like Stripe charges) that happen alongside state writes without a structural compensation path (like a catch-refund).
+* **Aggregate Member Bypass (Info)**: Flags mutating a member table directly without routing through the aggregate root.
 
 To save your current graph as a safe baseline:
 
@@ -172,10 +171,9 @@ npx sparda-mcp apocalypse --save-baseline
 ```
 
 Subsequent runs will diff the candidate graph against this baseline to detect regression vectors:
-
-- Deletion of any security `guard` (Critical).
-- Deletion of a database SQL invariant (High).
-- API blast radius expansion (Medium).
+* Deletion of any security `guard` (Critical).
+* Deletion of a database SQL invariant (High).
+* API blast radius expansion (Medium).
 
 If any Critical or High finding is found, `apocalypse` exits with a non-zero code to block your CI pipeline.
 
@@ -201,10 +199,9 @@ Recording is two lines in your app (ESM), with deterministic sampling and GDPR r
 
 ```js
 import { getFlightBox } from 'sparda-mcp/src/flight/box.js';
-const box = getFlightBox();
-box.arm();
-app.use(box.middleware({ sample: 100 })); // 1 request in 100; passwords/tokens redacted by default
-const db = box.wrapClient(pgPool); // your query client, tapped
+const box = getFlightBox(); box.arm();
+app.use(box.middleware({ sample: 100 }));   // 1 request in 100; passwords/tokens redacted by default
+const db = box.wrapClient(pgPool);           // your query client, tapped
 ```
 
 The closed loop nobody else has: **production bug → recorded flight → failing test → AI writes the fix → `apocalypse` proves the fix breaks no guard, invariant or transaction → deploy.** Replay is per-request (concurrent-race capture is out of scope for v1 — stated, not hidden).
@@ -221,7 +218,7 @@ npx sparda-mcp heal <flightId> --check --expect '{"status":404}'
 
 The brief is built from the graph itself — it hands the fixer the handler's `file:line`, the capabilities the fix must not grow, and the guards it must not remove. Then the **gate** — the actual product — proves the fix on three axes at once:
 
-1. **Behavior** — lenient replay of the recorded flight (same deterministic inputs) now produces the _expected_ response, not the recorded bug. The fix may reformulate a query (the tap is relabeled, allowed); it may **not** change the effect order or kinds.
+1. **Behavior** — lenient replay of the recorded flight (same deterministic inputs) now produces the *expected* response, not the recorded bug. The fix may reformulate a query (the tap is relabeled, allowed); it may **not** change the effect order or kinds.
 2. **Compiler laws** — `verify` still passes: the graph is still sound and deterministic.
 3. **No regression** — `apocalypse` diff against the frozen pre-fix graph: zero new critical/high findings, no guard removed, no blast radius grown.
 
@@ -229,11 +226,11 @@ The brief is built from the graph itself — it hands the fixer the handler's `f
 ✓ HEALED & PROVEN — same recorded inputs, correct output, zero law broken, zero protection lost. Ship it.
 ```
 
-The gate is honest in both directions: an unfixed bug, or a "fix" that silently drops a guard, keeps it **closed** (exit 1). This is the difference between an AI that writes plausible code and a system that _proves_ the code is correct — the trust layer the agent era is missing.
+The gate is honest in both directions: an unfixed bug, or a "fix" that silently drops a guard, keeps it **closed** (exit 1). This is the difference between an AI that writes plausible code and a system that *proves* the code is correct — the trust layer the agent era is missing.
 
 ## Any Backend On Earth: OpenAPI Lowering
 
-SPARDA parses Express, FastAPI, Flask and Next.js natively — and **every other stack through the format the industry already agreed on**. Go, Java, Rails, Laravel, .NET: if it has an OpenAPI spec, it compiles.
+SPARDA parses Express, FastAPI and Next.js natively — and **every other stack through the format the industry already agreed on**. Go, Java, Rails, Laravel, .NET: if it has an OpenAPI spec, it compiles.
 
 ```bash
 npx sparda-mcp ubg --openapi openapi.json
@@ -261,6 +258,11 @@ To undo everything: **`npx sparda-mcp remove`** restores your code byte-for-byte
 
 ## The promise — every word is backed by a test in CI
 
+<div align="center">
+  <img src="assets/features-presentation.png" alt="SPARDA Features" width="800" />
+</div>
+
+<br/>
 
 1. **Three minutes, one command.** AST scan, router generation, reversible injection — no config.
 2. **Try it for free, leave for free.** `npx sparda-mcp remove` restores your code **byte-for-byte** (tested on JS, TS, Python, even Windows CRLF files). No trace, no lock-in.
@@ -269,7 +271,7 @@ To undo everything: **`npx sparda-mcp remove`** restores your code byte-for-byte
 5. **Nothing leaves your machine.** No telemetry to us, no cloud, local key auth, 4 exact-pinned dependencies.
 6. **What it learns is never lost.** Diagnoses, descriptions, settings — versioned with your git, surviving every re-init.
 
-What we _don't_ promise: the honest limits in [docs/SECURITY.md](./docs/SECURITY.md).
+What we *don't* promise: the honest limits in [docs/SECURITY.md](./docs/SECURITY.md).
 
 ## How it works
 
@@ -286,52 +288,34 @@ What we _don't_ promise: the honest limits in [docs/SECURITY.md](./docs/SECURITY
 ## What SPARDA gives your AI
 
 ### Operate, not just read
-
 Every route becomes a tool that runs against your live process — real auth, real data,
 warm connections. One call to **`sparda_get_context`** hands the AI the whole living
 picture: enabled tools, suggested workflows, runtime telemetry, quarantine state, and
 immune memory — so every session resumes where the last one stopped.
 
-### Prove the edit before you commit — the one check an LLM can't do to itself
-
-The AI just edited a route. Did it quietly drop a guard? It calls **`sparda_prove`** and
-finds out **now**, not in a CI run later. The tool recompiles the app to its behavior graph,
-discharges the same static obligations as `sparda apocalypse`, and returns a deterministic
-verdict — the exact word the CLI and badge emit, so it can never over-claim (a low-coverage
-clean app reads `SURFACE`, never a bare `PROVEN`). Save a baseline once
-(`sparda apocalypse --save-baseline`) and every later `sparda_prove` flags any finding with
-`regression: true` — the guard your edit removed, the route it dropped, the blast radius it
-grew. That's _"AI writes. SPARDA proves."_ inside the edit loop. Clients that list MCP prompts
-also get the **`prove-my-edit`** workflow.
-
 ### Write-safety: the AI can't write until you say so
-
 - Writes (POST/PUT/DELETE) ship **disabled**. Enable them per tool in `sparda.json`; your choice survives every re-init.
 - An enabled write is **never executed on the first call**. SPARDA returns an `awaiting_confirmation` envelope — a single-use token plus a preview of the action — and commits only after an explicit confirm step.
 - When your client supports MCP elicitation, that confirmation prompt appears **in the AI's own UI**.
 - **Proof-after-write**: every successful write is followed by a read-back of the same resource, so the AI — and you — see the real effect, not a hopeful guess.
 
 ### Your app defends itself — zero LLM on the hot path
-
 - **Quarantine.** A tool that returns 3 consecutive 5xx is quarantined: further calls get a `503` with a reason and a retry delay instead of hammering your broken route. After a cooldown it half-opens for a single probe.
 - **Latency & anomaly flags.** The router learns each route's baseline and flags deviations locally, in a few lines of math.
 - **Adaptive diagnosis, only on surprise.** A genuinely new failure wakes your AI client's own model to diagnose it once; the diagnosis is cached as an "antibody" in `sparda.json`, so the same failure later costs zero tokens. Cloning your code doesn't clone its immune memory.
 
 ### A free intelligence layer, zero API key
-
 On first connection your AI client's own model (via MCP sampling) rewrites raw routes
 into business-language tool descriptions and proposes multi-step workflows — cached in
 `sparda.json` and exposed as MCP prompts. Nothing to configure, nothing to pay.
 
 ### It gets cheaper the more you use it
-
 - **Response recycling.** When a read keeps returning the same answer, SPARDA serves the next identical call straight from memory — without touching your host app. Reads only; writes always hit the host.
 - **A recycling gauge.** `GET /mcp/stats` counts how many calls were answered from SPARDA's own knowledge vs. how many paid the host route. It reads 0% on day one and fills with usage — a measure, never a promise.
 
 ### Tools nobody wrote — Labs, opt-in, default OFF
-
 Turn it on with `"labs": { "recordSequences": true }` in `sparda.json`. SPARDA then
-notices when one tool's output feeds the next tool's input and records the _circuit_ —
+notices when one tool's output feeds the next tool's input and records the *circuit* —
 structure only (tool names, argument names, counts), never your data. A read-only
 circuit seen enough times **crystallizes into a composite tool**, announced
 mid-session: one call runs the whole chain, auto-feeding each step from the previous
@@ -339,13 +323,11 @@ step's real response. Write routes are never absorbed — their per-call confirm
 always stands.
 
 ### Living context & telemetry
-
 `GET /mcp/stats` (per-tool calls/errors, tool "purity", quarantine state) and
 `GET /mcp/events` (errors, latency anomalies, cached diagnoses) expose exactly what
 your app is doing — surfaced to the AI as live notifications.
 
 ## Built for AI clients: the bundled Skill
-
 SPARDA ships with an Agent Skill ([`SKILL.md`](./SKILL.md)) that teaches any compatible
 AI client how to drive a SPARDA server to its **full potential** — call
 `sparda_get_context` first, exploit response recycling, honor quarantine, prefer
@@ -356,20 +338,13 @@ runtime, so the guidance never goes stale.
 ## Supported frameworks
 
 - **Next.js App Router (13/14/15)** — file-based injection. SPARDA creates a catch-all route handler. It natively resolves wrapped handlers (`export const POST = withAuth(h)`) and deep effect chains.
-- **NestJS** — AST-based router injection. Deeply resolves Multi-hop Dependency Injection (Controller → Service → Repository), inherited DI, and `baseUrl`/`paths` imports. Fully supports composite decorators (`applyDecorators`). Resolves ORM writes: Prisma, Kysely, and TypeORM injected repositories (`@InjectRepository(Entity)` → `this.repo.save()`).
-- **Strapi** — Native AST ingestion of Strapi content-types, core controllers, and custom routes.
-- **Express 4/5** (JS/TS, ESM/CJS) — AST-based router injection. Deeply resolves external controllers, Mongoose schemas, barrel re-exports, and inline handlers. Uses dynamic tree-scanning to find non-standard entry points (`bootstrap.ts`, etc).
+- **NestJS** — AST-based router injection. Deeply resolves Multi-hop Dependency Injection (Controller → Service → Repository), inherited DI, and `baseUrl`/`paths` imports. Supports Prisma, TypeORM, and Kysely.
+- **Express 4/5** (JS/TS, ESM/CJS) — AST-based router injection. Deeply resolves external controllers, Mongoose schemas, and barrel re-exports. Uses dynamic tree-scanning to find non-standard entry points (`bootstrap.ts`, etc).
 - **MedusaJS** — Native AST ingestion of complex e-commerce routing.
 - **Any Backend On Earth (Go, Java, Rails, Laravel)** — Compiles flawlessly from OpenAPI 3.x specs.
 - **FastAPI** (Python >= 3.9) — AST-based router injection.
 
-### Effects it resolves (what makes the irreversibility & atomicity proofs bite)
-
-- **Databases** — Prisma (incl. named/multiline relations and interactive `$transaction(tx ⇒ …)`), TypeORM, Kysely, Drizzle, Knex, Sequelize, Mongoose, and raw SQL. Foreign keys become aggregate/consistency domains, so a multi-table write outside a transaction is caught.
-- **External side-effects** — recognized by call shape and by import origin, so an irreversible outbound effect next to a DB write is proven compensable-or-not: `fetch`/axios/got, Stripe, Twilio, SendGrid/Resend/nodemailer, AWS SDK v3 (`send(new PutObjectCommand())`), and other payment/mail/cloud/queue clients. A read on such a client stays a non-observable GET — no false alarms.
-
 ## Security posture (honest)
-
 - 4 runtime dependencies, exact-pinned.
 - **Dynamic Local Key Resolution.** The generated router contains no baked secrets. It resolves authorization keys at runtime from the `SPARDA_LOCAL_KEY` environment variable or the local gitignored `.sparda/key` file, and fails closed (503) when neither is found. For custom production or staging setups, you can override this behavior by exposing `SPARDA_LOCAL_KEY` in your environment.
 - Local key on every router call; self-reference loop protection; 30s timeouts; 8 KB output truncation.
@@ -379,24 +354,26 @@ runtime, so the guidance never goes stale.
 Full threat model and known gaps: [docs/SECURITY.md](./docs/SECURITY.md).
 
 ## Documentation
-
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — how `init`, the injected router, and the bridge fit together, plus the `sparda.json` schema.
 - [docs/SECURITY.md](./docs/SECURITY.md) — threat model, defenses, and honest known gaps.
 - [docs/TESTING.md](./docs/TESTING.md) — how the promises above are kept honest in CI.
 - [docs/ERRORS.md](./docs/ERRORS.md) — the error knowledge base.
 
 ## Beyond the open core
-
 SPARDA is free, including in production (see License). Team-scale capabilities —
 fine-grained per-person access policies and a signed, tamper-evident audit log — are
 planned for a future paid tier. The open core stands on its own; nothing here is
 crippled to upsell you.
 
 ## License
-
 [Business Source License 1.1](./LICENSE) — free to use, including in production.
 You may not resell SPARDA or offer it as a competing commercial service.
 Each version converts to Apache 2.0 four years after its release.
 
+<div align="center">
+  <img src="assets/github-star.png" alt="Leave a Star" width="600" />
+</div>
+
+<br/>
 
 By [Residual Labs](https://residual-labs.fr)

@@ -1,0 +1,38 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "novu-authenticated-test-email",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "authenticated-test-side-effect",
+  "route": {
+    "method": "POST",
+    "path": "/test/email"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "The route and outbound email effect are present; class-level authentication is an intentionally hard indirect guard."
+  },
+  "origin": {
+    "repository": "novuhq/novu",
+    "url": "https://github.com/novu/novu",
+    "corpus": "novu",
+    "appDir": ".",
+    "commit": "00e7b5cb8a09d199e15baec7f4b469661b6817ed",
+    "source": [
+      {
+        "path": "apps/api/src/app/events/events.controller.ts",
+        "sha256": "c27954299ced06181ae738194b19766a425c923a1d2e63bcbd9567573f9ff605",
+        "fingerprint": "311001e4196c207f7a075ee0d0cb237dd7c1e962e7de2137009dddb51ffa343c"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "A test-email side effect is safe for the tested unauthorized-action property when it inherits a controller authentication requirement before method execution.",
+    "why": "sendTestEmail is a method of EventsController, whose RequireAuthentication decorator is declared at class level."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

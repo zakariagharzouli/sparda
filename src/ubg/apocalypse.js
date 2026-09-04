@@ -512,7 +512,24 @@ export function checkGraph(graph) {
     // helper's where clause is invisible — so it NEVER flips the verdict, it points a human
     // at the exact routes to review. MUST-analysis: `ownerScoped` is set only when proven.
     obligations++;
-    const idScoped = reached.filter((n) => n?.kind === 'effect' && n.meta.idScoped);
+    // Node Semantic Kernel: a filter whose value provably came from a surface the
+    // CLIENT chooses (`params`/`query`/`body`) selects an object the caller named.
+    // `session` is the opposite — an identity the framework attached — so it is a
+    // CONSTRAINT, not a selector, and a route that carries one is scoped.
+    const CLIENT_CHOSEN = new Set(['params', 'query', 'body']);
+    const clientFilterOrigins = (node) =>
+      (node?.meta?.filterOrigins ?? []).filter((o) => CLIENT_CHOSEN.has(o.origin));
+    const clientScoped = reached.filter(
+      (n) => n?.kind === 'effect' && clientFilterOrigins(n).length > 0,
+    );
+    const idScoped = reached.filter(
+      (n) => n?.kind === 'effect' && (n.meta.idScoped || clientFilterOrigins(n).length),
+    );
+    // A session-derived filter is ALREADY a proven owner scope: `whereOwnerScoped`
+    // recognises a value read off session/auth regardless of the column it is
+    // compared to. A second `identityConstrained` test was written here and then
+    // deleted — no fixture could distinguish it from this line, and a mechanism
+    // no test can tell apart from another is dead weight (E-106, ADR-097).
     const ownerScopedSeen = reached.some(
       (n) => n?.kind === 'effect' && n.meta.ownerScoped,
     );
@@ -545,12 +562,26 @@ export function checkGraph(graph) {
       const hints = ownership
         .filter((o) => o.model)
         .map((o) => `${o.table} should be ${o.model} (${o.key})`);
+      // The full witness: which request surface, which named value, which table,
+      // at which line. An advisory a human cannot check in one look is noise.
+      const dataWitness = clientScoped.flatMap((n) =>
+        clientFilterOrigins(n).map((o) => ({
+          origin: o.origin,
+          name: o.name,
+          table: n.meta.table ?? null,
+          at: locOf(n),
+        })),
+      );
       findings.push({
         rule: 'OBJECT_SCOPE_UNPROVEN',
+        // ADVISORY, and it stays advisory in this change by explicit instruction.
+        // Promoting it needs its own ADR, dedicated hard negatives and a fresh
+        // precision measurement — it can only be decided by measuring it first.
         severity: 'info',
         advisory: true,
         entrypoint: ep.id,
         ownership,
+        ...(dataWitness.length ? { dataWitness } : {}),
         message:
           `${ep.label} accesses ${tables.join(', ')} by a request-supplied id with no ownership scope proven on the path` +
           (hints.length ? ` — ${hints.join('; ')}` : '') +

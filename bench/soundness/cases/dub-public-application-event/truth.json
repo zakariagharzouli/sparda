@@ -1,0 +1,38 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "dub-public-application-event",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "public-rate-limited-telemetry-write",
+  "route": {
+    "method": "POST",
+    "path": "/api/track/application"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "Next route handler and direct Prisma write are represented by the current compiler."
+  },
+  "origin": {
+    "repository": "dubinc/dub",
+    "url": "https://github.com/dubinc/dub",
+    "corpus": "dub",
+    "appDir": "apps/web",
+    "commit": "bbc533ed6d0de62a9a23d2e7091da94f6c7b4db8",
+    "source": [
+      {
+        "path": "apps/web/app/(ee)/api/track/application/route.ts",
+        "sha256": "f1bdac70524ee2c1abe52acf97a8a0c54da10dc0e210034ed35f775bf1a708fa",
+        "fingerprint": "71de02f8e554601f451ad6c386ad14992407d94261dd08b9201e155ead3f469a"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "A public telemetry endpoint is safe for the tested authorization property when its only write is deliberately public, request-schema validated and IP-rate-limited.",
+    "why": "The handler rejects bots, limits track-application by IP, parses a Zod schema and writes an application event rather than an account-privileged state change."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

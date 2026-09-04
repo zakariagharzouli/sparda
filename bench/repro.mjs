@@ -21,7 +21,7 @@ import { compileUBG } from '../src/ubg/compile.js';
 import { canonicalizeGraph } from '../src/ubg/schema.js';
 import { checkGraph, verdictOf, verdictState } from '../src/ubg/apocalypse.js';
 import { surveyBlindspots } from '../src/ubg/blindspots.js';
-import { premiseFor, withPremiseGaps, basisFrom } from '../src/ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps, basisFrom } from '../src/ubg/premise.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,7 +73,9 @@ async function measure(appDir) {
   // committed evidence file the README points at, so it is bound by the same rule as the
   // badge: no word over an app whose route table nobody checked. Boot-free oracle only —
   // a reproducibility bench must never execute the repos it clones.
-  const premise = await premiseFor(c, report, { cwd: appDir });
+  const premise = await certifiableOrgan('bench-repro').premise(c, report, {
+    cwd: appDir,
+  });
   const blind = surveyBlindspots(c, withPremiseGaps(report, premise));
   const verdict = verdictOf(findings, c, {
     coverage: blind.coverage.ratio,

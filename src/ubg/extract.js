@@ -9,6 +9,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
+import { MONGO_ARG_ROLES, MONGO_COLLECTION_OPS } from './kernel/contracts.js';
+import { localFunctions } from './kernel/bindings.js';
 
 const MAX_EFFECTS = 40;
 const MAX_RETURN_SHAPES = 10;
@@ -112,6 +114,23 @@ const PRISMA_OPS = {
 // TypeORM write verbs on a repository / entity-manager. Only fire when the RECEIVER is provably
 // a repository (in ctx.repoTables) — a generic `.save()`/`.update()` on an unknown object never
 // fires, so false positives stay near zero. Reads (find/findOne/count/…) are not here.
+// Which ARGUMENT plays which role, per TypeORM method. Positional, so it cannot
+// be inferred from the op alone: `update` splits criteria and partial entity,
+// `save` is data only, `delete` is criteria only.
+const TYPEORM_ARG_ROLES = {
+  save: { filter: null, data: 0 },
+  insert: { filter: null, data: 0 },
+  upsert: { filter: null, data: 0 },
+  update: { filter: 0, data: 1 },
+  increment: { filter: 0, data: 1 },
+  decrement: { filter: 0, data: 1 },
+  delete: { filter: 0, data: null },
+  remove: { filter: 0, data: null },
+  softdelete: { filter: 0, data: null },
+  softremove: { filter: 0, data: null },
+  restore: { filter: 0, data: null },
+};
+
 const TYPEORM_WRITE = {
   save: 'insert',
   insert: 'insert',
@@ -563,6 +582,120 @@ export function collectAuthGuards(body) {
 // collectEffectClients): imported from a DB package, or `new X()`/`X(...)`/alias of a labeled
 // binding. Deliberately provenance-only — never a name test — so `const db = notARealDb` is NOT
 // a handle, and a handle named `store` still IS one.
+// Modules whose exports structurally cannot touch a database.
+const NON_DB_PACKAGES = new Set(['crypto', 'node:crypto']);
+
+// Top-level bindings proven to come from a non-DB module.
+//
+// ADVERSARIAL GUARD, and it is the whole reason this is not a name test: a name
+// that is ALSO declared somewhere else in the module could be shadowed at the
+// call site, and this collector cannot see which declaration a given reference
+// resolves to. Rather than ship that weakness, any such name is DROPPED from the
+// set — it falls back to UNRESOLVED, never to NON_DB_KNOWN. Excluding by text
+// alone is exactly the mistake two earlier attempts were rejected for.
+// Is `require` in this module the HOST's require, or a local binding wearing its
+// name? A parameter, variable, function or class called `require` shadows it, and
+// every `require('./x')` in that module then resolves to something the walk has
+// not seen. Reading it as a module load reports the routes of a file the server
+// may never load — measured on a fixture where a shadowed `require` served
+// `/decoy` while SPARDA reported the real `./routes` module's routes.
+//
+// Module-scoped and conservative on purpose: a lexical scope-chain check is the
+// precise answer, but shadowing `require` is vanishingly rare in real code (0
+// occurrences across the seven-app corpus, measured), so the conservative form
+// costs nothing real and cannot be fooled by a nested shadow the walk misses.
+// Same shape as `collectNonDbHandles`'s adversarial guard, and for the same
+// reason: a name is not a proof of origin.
+export function requireIsShadowed(ast) {
+  let shadowed = false;
+  walkAst(ast, (node) => {
+    if (shadowed) return;
+    if (
+      (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') &&
+      node.id?.name === 'require'
+    )
+      shadowed = true;
+    else if (
+      node.type === 'VariableDeclarator' &&
+      node.id?.type === 'Identifier' &&
+      node.id.name === 'require'
+    )
+      shadowed = true;
+    else if (
+      node.type === 'FunctionDeclaration' ||
+      node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression'
+    ) {
+      for (const param of node.params ?? [])
+        if (param?.type === 'Identifier' && param.name === 'require') shadowed = true;
+    }
+  });
+  return shadowed;
+}
+
+function collectNonDbHandles(ast) {
+  const body = ast?.program?.body ?? [];
+  const labeled = new Set();
+  for (const node of body) {
+    if (node.type === 'ImportDeclaration') {
+      if (NON_DB_PACKAGES.has(node.source.value))
+        for (const spec of node.specifiers) labeled.add(spec.local.name);
+      continue;
+    }
+    if (node.type !== 'VariableDeclaration') continue;
+    for (const d of node.declarations) {
+      const init = d.init;
+      const required =
+        init?.type === 'CallExpression' &&
+        init.callee?.type === 'Identifier' &&
+        init.callee.name === 'require' &&
+        init.arguments[0]?.type === 'StringLiteral'
+          ? init.arguments[0].value
+          : null;
+      if (!required || !NON_DB_PACKAGES.has(required)) continue;
+      if (d.id.type === 'Identifier') labeled.add(d.id.name);
+      // `const { createHash } = require('crypto')`, including `{ createHash: h }`
+      if (d.id.type === 'ObjectPattern')
+        for (const prop of d.id.properties)
+          if (prop.type === 'ObjectProperty' && prop.value?.type === 'Identifier')
+            labeled.add(prop.value.name);
+    }
+  }
+  if (!labeled.size) return labeled;
+  // Any name re-declared ANYWHERE in the module (function, variable, class,
+  // parameter) may be shadowed at a call site this collector never sees.
+  const shadowed = new Set();
+  walkAst(ast, (node) => {
+    if (node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration') {
+      if (node.id?.type === 'Identifier' && labeled.has(node.id.name))
+        shadowed.add(node.id.name);
+    } else if (node.type === 'VariableDeclarator') {
+      if (
+        node.id?.type === 'Identifier' &&
+        labeled.has(node.id.name) &&
+        !isNonDbRequire(node.init)
+      )
+        shadowed.add(node.id.name);
+    } else if (
+      node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression' ||
+      node.type === 'FunctionDeclaration'
+    ) {
+      for (const param of node.params ?? [])
+        if (param?.type === 'Identifier' && labeled.has(param.name))
+          shadowed.add(param.name);
+    }
+  });
+  for (const name of shadowed) labeled.delete(name);
+  return labeled;
+}
+
+const isNonDbRequire = (init) =>
+  init?.type === 'CallExpression' &&
+  init.callee?.type === 'Identifier' &&
+  init.callee.name === 'require' &&
+  NON_DB_PACKAGES.has(init.arguments?.[0]?.value);
+
 function collectDbHandles(body) {
   const labeled = new Set();
   const isLabeled = (n) => n?.type === 'Identifier' && labeled.has(n.name);
@@ -733,6 +866,12 @@ export function parseModule(absFile) {
     imports: new Map(),
     reexports: new Map(), // barrel: `module.exports.x = require('./x')` → x -> file
     starReexports: [], // ESM barrel: `export * from './x'` → [file] (searched by name)
+    // localName -> { specifier, pkg, line } for an import that names a package
+    // DECLARED IN THIS WORKSPACE and still did not resolve to a file. Without this
+    // the binding is simply absent from `imports` and the SPECIFIER is lost, so a
+    // stop downstream can only say "this name did not bind" — never "this package
+    // did not open", which is the cause a hundred routes share.
+    unresolvedWorkspace: new Map(),
     error: null,
     _file: absFile, // the module's own path — DI resolution reports source locations
   };
@@ -771,6 +910,10 @@ export function parseModule(absFile) {
   for (const node of facts.ast.program.body) collectTopLevel(node, facts, absFile, false);
   facts.effectClients = collectEffectClients(facts.ast.program.body);
   facts.dbHandles = collectDbHandles(facts.ast.program.body);
+  facts.nonDbHandles = collectNonDbHandles(facts.ast);
+  // when true, every `require(...)` in this module is a binding the walk cannot
+  // vouch for, so a mount that depends on one must be DECLARED, not resolved
+  facts.requireShadowed = requireIsShadowed(facts.ast);
   facts.authGuards = collectAuthGuards(facts.ast.program.body);
   return facts;
 }
@@ -827,6 +970,19 @@ export function resolveExportedClass(mod, name, seen = new Set()) {
     if (hit) return hit;
   }
   return null;
+}
+
+// A binding that did not resolve is dropped from `imports` — that is correct, there
+// is no file to point at. What must NOT be dropped is the SPECIFIER: it is the root
+// cause a hundred dependent routes share, and without it every downstream stop can
+// only report the local name. Recorded for workspace packages only (see
+// `workspacePackageOf`).
+function noteWorkspaceMiss(facts, absFile, specifier, names, line) {
+  const pkg = workspacePackageOf(absFile, specifier);
+  if (!pkg) return;
+  for (const name of names)
+    if (name && !facts.unresolvedWorkspace.has(name))
+      facts.unresolvedWorkspace.set(name, { specifier, pkg, line });
 }
 
 function collectTopLevel(node, facts, absFile, exported) {
@@ -889,6 +1045,39 @@ function collectTopLevel(node, facts, absFile, exported) {
         const resolved = resolveRelImport(absFile, init.arguments[0].value);
         if (resolved) {
           if (d.id.type === 'Identifier') facts.imports.set(d.id.name, resolved);
+        } else
+          noteWorkspaceMiss(
+            facts,
+            absFile,
+            init.arguments[0].value,
+            [d.id.name],
+            d.loc?.start.line ?? 0,
+          );
+      } else if (
+        // Member require — `const AllocationsDAO = require('./x').AllocationsDAO`.
+        // The destructured twin two blocks below has been handled since the CJS era;
+        // this shape had not, so a module bound this way was absent from `imports`
+        // and every call on it resolved to nothing. An unresolved receiver leaves no
+        // registration and no skip, so the whole DAO layer below it disappeared in
+        // silence — the exact loss shape hard rule 9 exists to forbid (NodeGoat's
+        // data layer, measured: 0 effects in the entire compiled graph).
+        init.type === 'MemberExpression' &&
+        !init.computed &&
+        init.property?.type === 'Identifier' &&
+        init.object?.type === 'CallExpression' &&
+        init.object.callee?.type === 'Identifier' &&
+        init.object.callee.name === 'require' &&
+        init.object.arguments[0]?.type === 'StringLiteral'
+      ) {
+        const resolved = resolveRelImport(absFile, init.object.arguments[0].value);
+        if (resolved) {
+          // Follow a barrel the same way the destructured form does, so
+          // `require('./index').Thing` lands on the module that declares Thing.
+          const barrel = resolved === absFile ? null : parseModule(resolved);
+          facts.imports.set(
+            d.id.name,
+            barrel?.reexports.get(init.property.name) ?? resolved,
+          );
         }
       } else if (init.type === 'CallExpression') {
         // wrapper idiom: const register = catchAsync(async (req, res) => …)
@@ -915,7 +1104,18 @@ function collectTopLevel(node, facts, absFile, exported) {
         d.init.arguments[0]?.type === 'StringLiteral'
       ) {
         const resolved = resolveRelImport(absFile, d.init.arguments[0].value);
-        if (!resolved) continue;
+        if (!resolved) {
+          noteWorkspaceMiss(
+            facts,
+            absFile,
+            d.init.arguments[0].value,
+            d.id.properties
+              .filter((p) => p.type === 'ObjectProperty' && p.value.type === 'Identifier')
+              .map((p) => p.value.name),
+            d.loc?.start.line ?? 0,
+          );
+          continue;
+        }
         // if the required module is a barrel, resolve each destructured member to the
         // sub-module it re-exports (`{ userService }` → user.service.js, not index.js).
         const barrel = resolved === absFile ? null : parseModule(resolved);
@@ -935,7 +1135,16 @@ function collectTopLevel(node, facts, absFile, exported) {
   }
   if (node.type === 'ImportDeclaration') {
     const resolved = resolveRelImport(absFile, node.source.value);
-    if (!resolved) return;
+    if (!resolved) {
+      noteWorkspaceMiss(
+        facts,
+        absFile,
+        node.source.value,
+        node.specifiers.map((spec) => spec.local.name),
+        node.loc?.start.line ?? 0,
+      );
+      return;
+    }
     for (const spec of node.specifiers) facts.imports.set(spec.local.name, resolved);
     return;
   }
@@ -1100,6 +1309,24 @@ function expandGlob(root, glob) {
   }
 }
 
+// The workspace package a specifier names, or null. `null` for a relative path and
+// for an external npm dependency — an unopened `@nestjs/common` is a deliberate,
+// long-standing scope decision, not a gap, and reporting it would drown the ledger
+// in causes nobody can act on.
+export function workspacePackageOf(fromFile, spec) {
+  if (!spec || spec.startsWith('.') || spec.startsWith('/')) return null;
+  const map = workspacePackages(fromFile);
+  if (!map) return null;
+  let best = null;
+  for (const name of map.keys())
+    if (
+      (spec === name || spec.startsWith(name + '/')) &&
+      name.length > (best?.length ?? -1)
+    )
+      best = name;
+  return best;
+}
+
 export function workspacePackages(fromFile) {
   const root = findWorkspaceRoot(fromFile);
   if (!root) return null;
@@ -1159,7 +1386,33 @@ function resolveWorkspaceImport(fromFile, spec) {
 }
 
 // probe the standard TS/JS extensions + index files for a resolved base path.
+// A directory whose OWN package.json decides what `require('./dir')` loads.
+//
+// Node consults that manifest (`main`, and in modern Node `exports`) before it
+// ever considers `index.js`. Guessing `index.js` past it does not merely miss a
+// file — it analyses a DIFFERENT module than the one that runs, so SPARDA
+// reports the routes of a file the server never loads and misses the ones it
+// does. Measured: a fixture whose `routes/package.json` names `other.js` served
+// `DELETE /from-main-field` and SPARDA reported `POST /widgets` from `index.js`.
+//
+// V1 refuses rather than following `main`: `exports` maps, conditional exports
+// and `type` interact, and a half-implemented manifest reader would swap one
+// wrong answer for a subtler one. The refusal is DECLARED upstream (the mount
+// becomes a skipped surface), never a silent null.
+const directoryOwnsItsResolution = (dir) => {
+  try {
+    return fs.existsSync(path.join(dir, 'package.json'));
+  } catch {
+    return false; // unreadable — the index fallback below is no less safe
+  }
+};
+
 function firstModuleFile(base) {
+  // The file candidates are tried FIRST and unconditionally: `routes.js` must
+  // always beat `routes/index.js`, exactly as Node orders them.
+  const indexFallback = directoryOwnsItsResolution(base)
+    ? []
+    : [path.join(base, 'index.ts'), path.join(base, 'index.js')];
   for (const cand of [
     base,
     `${base}.ts`,
@@ -1167,8 +1420,7 @@ function firstModuleFile(base) {
     `${base}.js`,
     `${base}.mjs`,
     `${base}.cjs`,
-    path.join(base, 'index.ts'),
-    path.join(base, 'index.js'),
+    ...indexFallback,
   ]) {
     try {
       if (fs.existsSync(cand) && fs.statSync(cand).isFile()) return cand;
@@ -1485,6 +1737,12 @@ export function scanFunction(fnNode, env = {}) {
     credentialSignals: { verifyCall: false, denies4xxOrThrows: false, redirects: false },
     // guard-dominance (C2): set true once any in-body guard barrier is seen while walking the body.
     hasInBodyGuard: false,
+    // Node Semantic Kernel: bodies that run LATER. Collected structurally
+    // (`await`, `.then`/`.catch`, a positional `(err, value)` callback) so the
+    // kernel can state that a DB effect sits behind a continuation rather than
+    // on the handler's straight line. Bounded — a body with hundreds of
+    // continuations tells the ledger nothing a dozen do not.
+    continuations: [],
     async: Boolean(fnNode?.async),
   };
   if (!fnNode) return result;
@@ -1502,6 +1760,13 @@ export function scanFunction(fnNode, env = {}) {
     // SDK client is recognized by origin. Absent → the path/command catalog still applies.
     effectClients: env.effectClients ?? null,
     dbHandles: env.dbHandles ?? null,
+    // top-level bindings proven to come from a non-DB module (node:crypto)
+    nonDbHandles: env.nonDbHandles ?? null,
+    // Captured Mongo collection handles from the ENCLOSING scopes of this body
+    // (kernel/bindings.js). Absent → the contract simply never fires.
+    collections: env.collections ?? null,
+    // nested helpers of THIS body — a filter document is often produced by one
+    nestedFns: localFunctions(fnNode),
     // TypeORM repository provenance: class-injected repo fields (env.repoFields, from the owning
     // class) merged with local `getRepository(Entity)` vars found in THIS body → receiver → table.
     repoTables: mergeRepoTables(env.repoFields, collectRepoVars(fnNode)),
@@ -1573,7 +1838,60 @@ const OWNERSHIP_ROOT = /^(session|auth|me|currentuser|actor|viewer|loggedin)/i;
 // Does this `where` object scope the row to the caller — an ownership key (`userId`), or a
 // value read off the session/auth (`where: { id, teamId: session.teamId }`)? MUST-analysis
 // (SOUNDNESS): we set it only when a scope is PROVEN, so "not scoped" is the honest default.
-function whereOwnerScoped(whereNode) {
+// A value the CLIENT sent never proves the client owns the row it selects — it
+// IS the thing an ownership check exists to validate. The twin of the gate added
+// to `callAssertsOwnership`: a Mongo/SQL `where` document and an ownership
+// assertion have the same shape, and `{ userId: <identifier> }` read as an owner
+// scope regardless of where the identifier came from.
+function whereOwnerScoped(whereNode, ctx) {
+  // PER PROPERTY, not per document. `{ id: req.params.id, userId: req.session.user.id }`
+  // is a legitimate scope: the client SELECTS the object and the session
+  // CONSTRAINS it. Rejecting the whole filter because it contains a client value
+  // would refuse exactly the pattern correct code uses. Only the binding that
+  // would carry the ownership proof is checked, and it is dropped when its own
+  // value came from the client.
+  const kept = withoutClientSuppliedProps(whereNode, ctx);
+  // Origin beats name. The shape rule recognises ownership by KEY NAME
+  // (`userId`, `ownerId`, `workspaceId`…), which is the "guard recognised by its
+  // name" mistake one level down: a filter comparing a column called
+  // `requestedBy` to the SESSION identity constrains the row just as much as one
+  // called `ownerId`. A value the framework attached to the request is the
+  // caller's identity whatever column it is compared to.
+  if (sessionDerivedProp(kept, ctx)) return true;
+  return whereOwnerScopedShape(kept);
+}
+
+// Does any surviving property compare against a value proven to come from the
+// session/auth surface? MUST-analysis: only a PROVEN session origin counts, so
+// this can never invent a scope out of an unresolved value.
+function sessionDerivedProp(node, ctx) {
+  if (node?.type !== 'ObjectExpression' || !ctx?.reqDerived?.origins) return false;
+  return node.properties.some(
+    (prop) =>
+      prop.type === 'ObjectProperty' &&
+      originsIn(prop.value, ctx.reqDerived.origins, 200, ctx.nestedFns).some(
+        (o) => o.origin === 'session',
+      ),
+  );
+}
+
+// A copy of the filter with every property whose VALUE provably came from a
+// client-controlled surface removed. Returns the node untouched when there is
+// nothing to check, so the shape rule keeps its previous behavior wherever
+// origins were never established.
+function withoutClientSuppliedProps(node, ctx) {
+  if (node?.type !== 'ObjectExpression' || !ctx?.reqDerived?.origins) return node;
+  const clientSupplied = (value) =>
+    originsIn(value, ctx.reqDerived.origins, 200, ctx.nestedFns).some((o) =>
+      CLIENT_CHOSEN_ORIGIN.has(o.origin),
+    );
+  const kept = node.properties.filter(
+    (prop) => prop.type !== 'ObjectProperty' || !clientSupplied(prop.value),
+  );
+  return kept.length === node.properties.length ? node : { ...node, properties: kept };
+}
+
+function whereOwnerScopedShape(whereNode) {
   if (whereNode?.type !== 'ObjectExpression') return false;
   let scoped = false;
   walkNodes(whereNode, (n) => {
@@ -1633,11 +1951,28 @@ function valueIsIdentity(node) {
 // hands the whole verified principal, not a `workspaceId:` key.
 const IDENTITY_KEY =
   /^(workspace|session|user|team|project|tenant|account|org|organization|member|membership|owner|actor|principal)$/i;
-function callAssertsOwnership(node) {
+// Surfaces the CLIENT controls. A value that came from one of these cannot prove
+// caller-ownership — it IS the thing an ownership check exists to validate.
+const CLIENT_CHOSEN_ORIGIN = new Set(['params', 'query', 'body']);
+
+function callAssertsOwnership(node, ctx) {
+  // A value the request supplied never asserts ownership, however it is spelled.
+  // `valueIsIdentity` already refuses a literal `req.params.x`; this extends the
+  // same gate to the INTERPROCEDURAL case, where the client value arrives as a
+  // parameter (`byUser(userId)` called with `req.params.userId`).
+  //
+  // Why this matters, measured: a Mongo filter document `{ userId: parsedUserId }`
+  // is syntactically identical to an ownership assertion — an ownership-named key
+  // bound to a plain identifier. On NodeGoat the filter of the labelled IDOR route
+  // was therefore read as PROOF AGAINST the IDOR, silencing its own advisory. The
+  // shape only became reachable once the DAO layer resolved.
+  const clientSupplied = (value) =>
+    CLIENT_CHOSEN_ORIGIN.has(requestOriginOf(value, ctx?.reqDerived?.origins)?.origin);
   for (const arg of node.arguments ?? []) {
     if (arg?.type !== 'ObjectExpression') continue;
     for (const p of arg.properties) {
       if (p.type !== 'ObjectProperty' || p.key?.type !== 'Identifier') continue;
+      if (clientSupplied(p.value)) continue;
       // (1) the verified identity handed in by name: `{ workspace, … }` / `{ session }`
       if (IDENTITY_KEY.test(p.key.name)) return true;
       // (2) an ownership key bound to the identity OR to a scope-named local (shorthand):
@@ -1778,6 +2113,426 @@ function optionValueOf(arg, name) {
   return null;
 }
 
+// Which REQUEST SURFACE a value came from — `req.params.userId` → 'params'.
+// `reqParamName` deliberately returns only the LEAF (`:userId`) because that
+// string is used as a symbolic TABLE name downstream; widening it would change
+// every existing consumer. The surface travels beside it instead.
+//
+// `user`/`auth` map to 'session': an identity the framework attached is the
+// caller's identity, and that is precisely the origin an ownership scope needs
+// to be distinguishable from a client-supplied one.
+const REQ_SURFACE = new Map([
+  ['params', 'params'],
+  ['query', 'query'],
+  ['body', 'body'],
+  ['headers', 'headers'],
+  ['cookies', 'headers'],
+  ['session', 'session'],
+  ['user', 'session'],
+  ['auth', 'session'],
+]);
+
+export function requestOriginOf(node, reqOrigins) {
+  node = unwrapTS(node);
+  if (node?.type === 'Identifier') return reqOrigins?.get(node.name) ?? null;
+  if (node?.type !== 'MemberExpression') return null;
+  const leaf = node.computed
+    ? node.property.type === 'StringLiteral'
+      ? node.property.value
+      : null
+    : node.property.type === 'Identifier'
+      ? node.property.name
+      : null;
+  if (!leaf) return null;
+  // `req.<surface>.<leaf>`
+  if (node.object.type === 'MemberExpression' && !node.object.computed) {
+    const surface = node.object.property?.name;
+    const root = rootIdentifier(node.object);
+    if (root && REQ_ROOTS.has(root.toLowerCase()) && REQ_SURFACE.has(surface))
+      return { origin: REQ_SURFACE.get(surface), name: leaf };
+  }
+  // `req.<surface>` used whole (`insertOne(req.body)`)
+  if (node.object.type === 'Identifier' && REQ_ROOTS.has(node.object.name.toLowerCase()))
+    return REQ_SURFACE.has(leaf) ? { origin: REQ_SURFACE.get(leaf), name: null } : null;
+  return null;
+}
+
+// Every request origin reachable inside an expression — the filter document
+// `{ userId: parsedUserId }` carries whatever `parsedUserId` was bound from.
+// Bounded and deterministic (sorted, deduped): this feeds a fact, not a search.
+export function originsIn(node, reqOrigins, budget = 200, nestedFns = null) {
+  const found = new Map();
+  const entered = new Set();
+  const walk = (n, fuel) => {
+    if (!n || typeof n !== 'object' || fuel.n <= 0) return;
+    fuel.n -= 1;
+    if (Array.isArray(n)) {
+      for (const child of n) walk(child, fuel);
+      return;
+    }
+    const hit = requestOriginOf(n, reqOrigins);
+    if (hit) found.set(`${hit.origin}:${hit.name ?? '*'}`, hit);
+    // An object property KEY is a name, not a value: `{ accountId: parsed }`
+    // must attribute the origin of `parsed`, never of the identifier `accountId`
+    // that happens to share a name with a request-derived variable. Reading the
+    // key would credit provenance the value does not have.
+    if (n.type === 'ObjectProperty' && !n.computed) {
+      walk(n.value, fuel);
+      return;
+    }
+    // `find(searchCriteria())` — the filter document is BUILT by a nested helper,
+    // so the origins live in that helper's body, not at this call site. Entered
+    // once each (`entered`) and under the same fuel budget, so a mutually
+    // recursive pair cannot spin.
+    if (
+      nestedFns &&
+      n.type === 'CallExpression' &&
+      n.callee?.type === 'Identifier' &&
+      nestedFns.has(n.callee.name) &&
+      !entered.has(n.callee.name)
+    ) {
+      entered.add(n.callee.name);
+      walk(nestedFns.get(n.callee.name).body, fuel);
+    }
+    for (const key of Object.keys(n)) {
+      if (key === 'loc' || key === 'range') continue;
+      const child = n[key];
+      if (child && typeof child === 'object') walk(child, fuel);
+    }
+  };
+  walk(node, { n: budget });
+  return [...found.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([, value]) => value);
+}
+
+// ---------------------------------------------------------------------------
+// TAPP-0 — request origins for EVERY modelled DB contract, not just Mongo.
+//
+// `originsIn` has existed since the Mongo driver contract and already answers
+// "which request surfaces reached this expression". It was wired to that one
+// branch, so Prisma, TypeORM, Knex/Supabase and active-record produced DB
+// occurrences with ZERO origin linkage: cal.com 169 occurrences / 0 origins,
+// twenty 1199 / 0, immich 1110 / 0. The analyser could see the effect and could
+// see the request, and nothing joined them.
+//
+// ONE helper, called from every branch with that branch's own argument roles —
+// never a second origin implementation per ORM, which is how four subtly
+// different answers to one question get shipped.
+//
+// THREE STATES, and keeping them apart is the whole contract (rule 13):
+//   [ … ]  origins were found
+//   [ ]    the expression WAS inspected and carried none — an answer
+//   null   not measurable here: the role does not exist on this call, the
+//          request-binding map is absent, or the argument is an opaque producer
+//          whose contents `originsIn` cannot represent. NOT an empty answer.
+const OPAQUE_ORIGIN_ARG = new Set([
+  'CallExpression',
+  'OptionalCallExpression',
+  'NewExpression',
+  'AwaitExpression',
+  'TaggedTemplateExpression',
+]);
+
+export function originsForRole(node, ctx) {
+  // the role does not exist on this call (a `select` has no data argument)
+  if (node == null) return null;
+  // no request-binding map for this body: nothing was measured, so nothing is
+  // reported — reporting `[]` would claim an inspection that never happened
+  if (!ctx?.reqDerived?.origins) return null;
+  // An opaque producer at the ROOT of the role: `create(buildPayload())`. Its
+  // contents are exactly what `originsIn` cannot see, and `[]` there would say
+  // "inspected, none" about an expression nobody opened. A nested helper the
+  // walk CAN enter is not opaque — `originsIn` follows those itself.
+  const opaque =
+    OPAQUE_ORIGIN_ARG.has(node.type) &&
+    !(
+      node.type === 'CallExpression' &&
+      node.callee?.type === 'Identifier' &&
+      ctx.nestedFns?.has(node.callee.name)
+    );
+  if (opaque) return null;
+  // a computed member (`req.body[key]`) is not a static access path
+  if (
+    node.type === 'MemberExpression' &&
+    node.computed &&
+    node.property?.type !== 'StringLiteral'
+  )
+    return null;
+  return originsIn(node, ctx.reqDerived.origins, 200, ctx.nestedFns);
+}
+
+// ---------------------------------------------------------------------------
+// TAPP-1 — the local ACCESS PATH between a request surface and a DB role.
+//
+// TAPP-0 answers WHICH request surfaces reached a role. It cannot answer THROUGH
+// WHAT. "something from the body ended up in the payload" and
+// `req.body.email → email → data.email` are different claims, and only the
+// second is evidence a reader can act on.
+//
+// This is NOT a widening of TAPP-0. `originsForRole` is the INPUT here: a path is
+// recorded for origins TAPP-0 already found and for no others, so the origin
+// coverage of every application is byte-identical before and after. That is what
+// makes the change auditable — any movement in the origin numbers would mean this
+// slice did something it was not asked to do.
+//
+// THE V1 GRAMMAR, closed:
+//   source        `req.body|params|query.<static property>`, directly or through
+//                 a local binding the same body already tracks — direct
+//                 assignment, alias, static destructuring, local normalizer call.
+//   destination   the role itself, or a chain of STATIC keys of object literals
+//                 inside it: `data.email`, `filter.user.id`.
+//
+// Everything else is `UNKNOWN_ACCESS_PATH`: a computed member or key, a spread,
+// an array, a conditional, a call this walk does not open, an untracked binding,
+// a whole-surface pass (`insertOne(req.body)` — the flow is real, the property
+// set is not readable), and any source outside body/params/query.
+//
+// The RECONCILIATION at the end is what makes that exhaustive rather than
+// aspirational: every origin TAPP-0 reported gets an entry, and one this walk
+// could not place gets the boundary. An origin dropped here would read downstream
+// exactly like a value that never reached the effect — the confusion hard rule 9
+// exists to forbid.
+const V1_SOURCE_SURFACES = new Set(['body', 'params', 'query']);
+const MAX_PATH_DEPTH = 8;
+const ACCESS_PATH_BUDGET = 200;
+
+const sourceSegment = (origin) => `req.${origin.origin}.${origin.name}`;
+
+// The local hops between the request member and the value handed to the effect,
+// oldest first. `null` — never a partial list — when the chain leaves the shapes
+// `collectReqDerived` records or runs past the depth budget: half a path is a
+// path that lies about where a value has been.
+// The step kinds this reader knows how to state. EXHAUSTIVE on purpose: an
+// unrecognised kind used to fall through to the `!step.from` return and yield a
+// TRUNCATED path — `req.body.startDate → startDate → data.$set.startDate`, with a
+// whole interprocedural hop erased and the fact still reading `resolved`. A path
+// that hides a hop claims more certainty than the walk has, which is the one
+// direction SOUNDNESS forbids. An unknown step kind is not a step this reader can
+// state, so it is no path at all.
+export const STEP_KINDS = new Set([
+  'assign',
+  'alias',
+  'destructure',
+  'normalizer',
+  'parameter',
+]);
+
+export function localChain(name, reqDerived) {
+  const steps = reqDerived?.steps;
+  const out = [];
+  let current = name;
+  for (let depth = 0; depth <= MAX_PATH_DEPTH; depth += 1) {
+    const step = steps?.get(current);
+    if (!step) return null;
+    if (!STEP_KINDS.has(step.via)) return null;
+    out.unshift(current);
+    if (step.via === 'normalizer') out.unshift(`${step.callee ?? '<call>'}()`);
+    // TAPP-2: the binding is a PARAMETER the caller bound by position. `hop`
+    // carries the caller's own chain plus the call it crossed, already built and
+    // already verified unambiguous at the seam (`resolve.js#seedTaint`) — this
+    // side cannot re-derive it, because the caller's body is not in scope here.
+    if (step.via === 'parameter') {
+      out.unshift(...step.hop);
+      return out;
+    }
+    if (!step.from) return out;
+    current = step.from;
+  }
+  return null;
+}
+
+// Walk the role expression looking for STATIC destinations. Silence on an
+// unsupported shape is safe ONLY because of the reconciliation in
+// `accessPathsForRole` — read the two together or not at all.
+function placeOrigin(out, origin, chain, dest, transforms = []) {
+  // A whole-surface pass (`insertOne(req.body)`) is a real flow whose PROPERTY SET
+  // is unreadable — recorded so the reconciliation declares it rather than
+  // mistaking it for the harmless prefix of a member it already placed.
+  if (origin.name == null) {
+    out.wholeSurface.add(origin.origin);
+    return;
+  }
+  // an origin outside body/params/query is outside the V1 source grammar
+  if (!V1_SOURCE_SURFACES.has(origin.origin)) return;
+  if (chain === null) return;
+  out.placed.push({
+    origin: origin.origin,
+    name: origin.name,
+    dest,
+    path: [sourceSegment(origin), ...chain, ...transforms, dest],
+  });
+}
+
+// A single-argument call to a plain local name, INLINE in the destination:
+// `usersCol.update({ _id: parseInt(userId) }, …)`. TAPP-1 already decided that a
+// normalizer does not launder provenance — this is the same rule stated at the
+// position where the transform is written inline instead of bound to a local, and
+// it is what lets the NodeGoat filter leg be stated at all.
+//
+// Deliberately narrow: exactly ONE argument (a second argument is a second value
+// whose contribution this grammar cannot apportion), a plain identifier callee (a
+// member call has a receiver whose identity is a separate question), and a bounded
+// nesting depth.
+const MAX_INLINE_TRANSFORMS = 2;
+
+const inlineTransformOf = (node) =>
+  node?.type === 'CallExpression' &&
+  node.callee?.type === 'Identifier' &&
+  node.arguments.length === 1
+    ? { label: `${node.callee.name}()`, argument: node.arguments[0] }
+    : null;
+
+function walkRoleDestinations(
+  node,
+  role,
+  ctx,
+  prefix,
+  out,
+  fuel,
+  depth,
+  transforms = [],
+) {
+  node = unwrapTS(node);
+  if (!node || fuel.n <= 0 || depth > MAX_PATH_DEPTH) return;
+  fuel.n -= 1;
+  const dest = role + prefix.map((k) => `.${k}`).join('');
+
+  if (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') {
+    // `requestOriginOf` refuses a computed member whose property is not a string
+    // literal, so `req.body[key]` never arrives here as an origin — it is left to
+    // the reconciliation, which is where it becomes a declared boundary.
+    const origin = requestOriginOf(node, ctx.reqDerived.origins);
+    if (origin) placeOrigin(out, origin, [], dest, transforms);
+    return;
+  }
+  if (node.type === 'Identifier') {
+    const origin = ctx.reqDerived.origins.get(node.name);
+    if (origin)
+      placeOrigin(out, origin, localChain(node.name, ctx.reqDerived), dest, transforms);
+    return;
+  }
+  // `{ _id: parseInt(userId) }` — the transform is recorded and the walk continues
+  // into its single argument. The destination does not move: the value still lands
+  // at this key, it simply crossed a converter on the way, and hiding that would
+  // describe a value that arrived untouched.
+  const inline =
+    transforms.length < MAX_INLINE_TRANSFORMS ? inlineTransformOf(node) : null;
+  if (inline) {
+    walkRoleDestinations(inline.argument, role, ctx, prefix, out, fuel, depth + 1, [
+      ...transforms,
+      inline.label,
+    ]);
+    return;
+  }
+  if (node.type === 'ObjectExpression') {
+    for (const prop of node.properties) {
+      // a spread, a method, or a computed key is not a static destination — and
+      // an origin underneath it is reconciled into the boundary, not dropped
+      if (prop.type !== 'ObjectProperty' || prop.computed) continue;
+      const key =
+        prop.key?.type === 'Identifier'
+          ? prop.key.name
+          : prop.key?.type === 'StringLiteral'
+            ? prop.key.value
+            : null;
+      if (key == null) continue;
+      walkRoleDestinations(
+        prop.value,
+        role,
+        ctx,
+        [...prefix, key],
+        out,
+        fuel,
+        depth + 1,
+        transforms,
+      );
+    }
+  }
+  // an array, a call, a conditional, a template: no static destination exists
+}
+
+// → entries | [] | null. The three states of TAPP-0, kept in lockstep on purpose:
+// `null` where the role was never measurable, `[]` where it was inspected and
+// nothing request-derived reached it, entries otherwise — one per (source,
+// destination), each either `resolved` with its steps or `unknown` with a
+// declared boundary and `path: null`.
+export function accessPathsForRole(node, role, ctx) {
+  const origins = originsForRole(node, ctx);
+  if (origins === null) return null;
+  if (origins.length === 0) return [];
+
+  const out = { placed: [], wholeSurface: new Set() };
+  walkRoleDestinations(node, role, ctx, [], out, { n: ACCESS_PATH_BUDGET }, 0);
+
+  const entries = [];
+  const seen = new Set();
+  for (const p of out.placed) {
+    const key = `${p.origin}:${p.name}:${p.dest}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ ...p, state: 'resolved' });
+  }
+  // Reconciliation — hard rule 9 at this layer. An origin TAPP-0 reported and this
+  // walk did not place is not an absence of flow: the value DID reach the role,
+  // through a shape the V1 grammar cannot state.
+  const placedSources = new Set(out.placed.map((p) => `${p.origin}:${p.name}`));
+  const placedSurfaces = new Set(out.placed.map((p) => p.origin));
+  for (const o of origins) {
+    if (placedSources.has(`${o.origin}:${o.name ?? '*'}`)) continue;
+    // `originsIn` reports `req.body` alongside `req.body.email`, because it walks
+    // into the member's own object. That whole-surface hit is the PREFIX of a path
+    // already stated, not a second journey — declaring it would put an
+    // UNKNOWN_ACCESS_PATH next to every resolved one and make the boundary
+    // meaningless. A surface the walk actually met AS A VALUE is a real
+    // whole-surface pass and falls through to the boundary below.
+    if (o.name == null && !out.wholeSurface.has(o.origin) && placedSurfaces.has(o.origin))
+      continue;
+    entries.push({
+      origin: o.origin,
+      name: o.name ?? null,
+      dest: null,
+      // `null`, never `[]`: an empty list of steps is a claim about a journey,
+      // not an admission that the journey is unreadable (rule 13).
+      path: null,
+      state: 'unknown',
+    });
+  }
+  return entries.sort(
+    (a, b) =>
+      cmpKey(a.origin, b.origin) ||
+      cmpKey(a.name ?? '*', b.name ?? '*') ||
+      cmpKey(a.dest ?? '', b.dest ?? ''),
+  );
+}
+
+const cmpKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+// The two roles of a DB call, measured together so a contract can never report
+// one and silently forget the other. `filter` selects rows, `data` writes them —
+// a client-chosen FILTER is an object-scope question, a client-chosen PAYLOAD is
+// a validation question, and folding them loses exactly that distinction.
+//
+// TAPP-1 rides HERE rather than at each contract's call site: five lowerings
+// asking the same question five times is five chances to answer it differently.
+export function originRoles({ filter, data }, ctx) {
+  return {
+    filterOrigins: originsForRole(filter, ctx),
+    dataOrigins: originsForRole(data, ctx),
+    filterPaths: accessPathsForRole(filter, 'filter', ctx),
+    dataPaths: accessPathsForRole(data, 'data', ctx),
+  };
+}
+
+// Spread the measured roles onto an effect. Always present, so `null` travels as
+// a value rather than as an absent key that reads like "none".
+export const withOriginRoles = (roles) => ({
+  filterOrigins: roles.filterOrigins,
+  dataOrigins: roles.dataOrigins,
+  filterPaths: roles.filterPaths,
+  dataPaths: roles.dataPaths,
+});
+
 export function reqParamName(node, reqDerived, thisSymbols) {
   node = unwrapTS(node);
   if (node?.type === 'Identifier') return reqDerived?.get(node.name) ?? null;
@@ -1813,7 +2568,24 @@ export function reqParamName(node, reqDerived, thisSymbols) {
 // body can still override. MUST-analysis: the caller only seeds a param it PROVED tainted.
 export function collectReqDerived(fnNode, seed = null) {
   const map = new Map();
-  if (seed) for (const [k, v] of seed) map.set(k, v);
+  // The ORIGIN map rides on the same walk rather than in a second function: two
+  // walks over the same value-flow shapes would drift apart, and the one that
+  // drifted would be the one nobody re-read. Non-enumerable so no consumer that
+  // iterates the marker map ever sees it.
+  const origins = new Map();
+  Object.defineProperty(map, 'origins', { value: origins, enumerable: false });
+  // TAPP-1: the HOP each binding took, recorded on this same walk for the same
+  // reason `origins` is. `origins` says a value came from the body; `steps` says
+  // it came through `const { email } = req.body` — and a second walk that
+  // rediscovered the value flow would eventually disagree with this one about
+  // which shapes count, with no way to tell which of the two was right.
+  const steps = new Map();
+  Object.defineProperty(map, 'steps', { value: steps, enumerable: false });
+  if (seed) {
+    for (const [k, v] of seed) map.set(k, v);
+    for (const [k, v] of seed.origins ?? []) origins.set(k, v);
+    for (const [k, v] of seed.steps ?? []) steps.set(k, v);
+  }
   // non-null request-taint marker if `init` is request-derived: a req member (`req.body`),
   // or an identifier already tracked as request-derived (`b` after `const b = req.body`).
   const reqSourceOf = (init) => {
@@ -1821,6 +2593,14 @@ export function collectReqDerived(fnNode, seed = null) {
     if (!node) return null;
     if (node.type === 'Identifier') return map.get(node.name) ?? null;
     if (node.type === 'MemberExpression') return reqParamName(node, map);
+    // `const parsedUserId = parseInt(userId)` — a conversion does not launder
+    // provenance: the value is still the one the client supplied. Under-
+    // approximating here is what made NodeGoat's filter look constant.
+    if (node.type === 'CallExpression')
+      for (const arg of node.arguments) {
+        const inner = reqSourceOf(arg);
+        if (inner) return inner;
+      }
     return null;
   };
   const walk = (n) => {
@@ -1833,17 +2613,59 @@ export function collectReqDerived(fnNode, seed = null) {
       if (n.id?.type === 'Identifier' && n.init?.type === 'MemberExpression') {
         const name = reqParamName(n.init, map);
         if (name) map.set(n.id.name, name);
+        const origin = requestOriginOf(n.init, origins);
+        if (origin) {
+          origins.set(n.id.name, origin);
+          // `from: null` = this binding IS the request member; the chain ends here
+          steps.set(n.id.name, {
+            via: 'assign',
+            from: null,
+            line: n.loc?.start.line ?? 0,
+          });
+        }
+      } else if (n.id?.type === 'Identifier' && n.init?.type === 'CallExpression') {
+        const src = reqSourceOf(n.init);
+        if (src) map.set(n.id.name, src);
+        for (const arg of n.init.arguments) {
+          const origin = requestOriginOf(arg, origins);
+          if (origin) {
+            origins.set(n.id.name, origin);
+            // `parseInt(userId)` — the normalizer is a STEP, not a laundering.
+            // Naming the callee keeps the transform visible in the evidence
+            // instead of letting the value appear to arrive unchanged.
+            steps.set(n.id.name, {
+              via: 'normalizer',
+              callee: n.init.callee?.type === 'Identifier' ? n.init.callee.name : null,
+              from: arg.type === 'Identifier' ? arg.name : null,
+              line: n.loc?.start.line ?? 0,
+            });
+            break;
+          }
+        }
       } else if (n.id?.type === 'Identifier' && n.init?.type === 'Identifier') {
         // alias: `const c = b` where b is already request-derived
         const src = map.get(n.init.name);
         if (src) map.set(n.id.name, src);
+        const originSrc = origins.get(n.init.name);
+        if (originSrc) {
+          origins.set(n.id.name, originSrc);
+          steps.set(n.id.name, {
+            via: 'alias',
+            from: n.init.name,
+            line: n.loc?.start.line ?? 0,
+          });
+        }
       } else if (n.id?.type === 'ObjectPattern' && reqSourceOf(n.init)) {
         // destructure: `const { title, body: b, ...rest } = req.body` — each binding is
         // request-derived; a named binding carries its KEY as the symbolic leaf (`:title`).
         const src = reqSourceOf(n.init);
+        // `const { userId } = req.params` — the dominant handler idiom, and the
+        // exact shape NodeGoat uses for both labelled routes.
+        const srcOrigin = requestOriginOf(n.init, origins);
         for (const prop of n.id.properties) {
           if (prop.type === 'RestElement' && prop.argument?.type === 'Identifier') {
             map.set(prop.argument.name, src); // rest carries the whole source taint
+            if (srcOrigin) origins.set(prop.argument.name, srcOrigin);
             continue;
           }
           if (prop.type !== 'ObjectProperty') continue;
@@ -1863,6 +2685,15 @@ export function collectReqDerived(fnNode, seed = null) {
                 ? val.left.name
                 : null;
           if (key && local) map.set(local, `:${key}`);
+          if (key && local && srcOrigin) {
+            origins.set(local, { origin: srcOrigin.origin, name: key });
+            steps.set(local, {
+              via: 'destructure',
+              from: null,
+              key,
+              line: n.loc?.start.line ?? 0,
+            });
+          }
         }
       }
     }
@@ -2055,6 +2886,25 @@ function visit(node, out, ctx) {
     taggedTemplateEffect(node, out, ctx);
   }
 
+  // Node Semantic Kernel, contract `node/callback`: the three structural forms a
+  // Node body uses to run code LATER. Recorded as facts, never as conclusions —
+  // the kernel states that an effect sits behind a continuation, and the resolver
+  // states separately whether the callee was resolvable at all.
+  if (node.type === 'AwaitExpression') pushContinuation(out, 'await', node);
+  if (
+    (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') &&
+    node.callee?.type === 'MemberExpression' &&
+    node.callee.property?.type === 'Identifier' &&
+    (node.callee.property.name === 'then' || node.callee.property.name === 'catch') &&
+    node.arguments.some(isFunctionNode)
+  )
+    pushContinuation(out, node.callee.property.name, node);
+  if (
+    (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') &&
+    isNodeStyleCallback(node)
+  )
+    pushContinuation(out, 'callback', node);
+
   if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
     // transaction scope: db.transaction(cb) / prisma.$transaction(...) — the
     // innermost scope wins; isolation only from a string literal, never guessed
@@ -2103,6 +2953,46 @@ function visit(node, out, ctx) {
   }
 }
 
+const isFunctionNode = (n) =>
+  n?.type === 'ArrowFunctionExpression' || n?.type === 'FunctionExpression';
+
+// A positional Node callback: the LAST argument is a function, and it is the
+// classic error-first shape — `(err)` / `(err, value)`. Requiring the error-first
+// signature is what separates a continuation from an ordinary function argument
+// (`arr.map(fn)`, `app.get(path, handler)`); without it every higher-order call
+// in the program would be recorded as an async continuation and the ledger would
+// describe JavaScript rather than the program.
+function isNodeStyleCallback(node) {
+  const last = node.arguments?.[node.arguments.length - 1];
+  if (!isFunctionNode(last)) return false;
+  const first = last.params?.[0];
+  if (first?.type !== 'Identifier') return false;
+  return /^(err|error|e)$/i.test(first.name);
+}
+
+const MAX_CONTINUATIONS = 32;
+
+function pushContinuation(out, form, node) {
+  if (out.continuations.length >= MAX_CONTINUATIONS) return;
+  const callee = node.callee ?? node.argument?.callee ?? null;
+  const symbol =
+    callee?.type === 'MemberExpression' && callee.property?.type === 'Identifier'
+      ? `${callee.object?.type === 'Identifier' ? `${callee.object.name}.` : ''}${callee.property.name}`
+      : callee?.type === 'Identifier'
+        ? callee.name
+        : null;
+  const line = node.loc?.start.line ?? 0;
+  // Content identity: the same continuation seen twice while re-walking a body
+  // is one fact, not two.
+  if (
+    out.continuations.some(
+      (c) => c.form === form && c.line === line && c.symbol === symbol,
+    )
+  )
+    return;
+  out.continuations.push({ form, line, symbol });
+}
+
 // Prisma `isolationLevel: 'Serializable'` & friends — literal or nothing
 function isolationLiteralOf(callNode) {
   for (const arg of callNode.arguments) {
@@ -2140,7 +3030,7 @@ function inspectCall(node, out, ctx) {
   // G1 (O7/BOLA only): a call that asserts caller-ownership at the site scopes the path —
   // `getCustomerOrThrow({ workspaceId: workspace.id, id })`. Advisory-only, so it can never
   // create a false PROVEN; it silences the false BOLA the imported ownership helper would raise.
-  if (callAssertsOwnership(node)) out.ownerAsserted = true;
+  if (callAssertsOwnership(node, ctx)) out.ownerAsserted = true;
 
   // G2 (advisory-only): a call whose NAME says it verifies a credential — `verifyUnsubscribeToken`,
   // `jwt.verify`, an HMAC/signature check. Family B/D of the guard taxonomy. Never a guard by
@@ -2283,9 +3173,30 @@ function inspectCall(node, out, ctx) {
 
   // ---- supabase/knex builder: X.from('t').insert(...) or knex('t').update(...)
   if (SUPABASE_OPS.has(methodLower)) {
-    const resolved = builderTableOf(callee.object, ctx.reqDerived, ctx.thisSymbols);
-    if (resolved) {
+    const resolved = builderTableOf(
+      callee.object,
+      ctx.reqDerived,
+      ctx.thisSymbols,
+      ctx.nonDbHandles,
+    );
+    // The refusal stops HERE, on purpose. Returning instead would skip every
+    // rule below for this call — active-record, Mongo collection, opaque
+    // persistence — and a call whose receiver holds a real database handle would
+    // go silent. A narrower rule may decline; only a broader one may return.
+    const declined = resolved?.nonDb === true;
+    if (resolved && !declined) {
+      // TAPP-0: on a builder, THIS call carries the written document; the filter
+      // lives in a separate `.where(...)` link of the chain, so the filter role
+      // is genuinely not present here — `null`, never an empty answer.
+      const roles = originRoles(
+        {
+          filter: null,
+          data: methodLower === 'select' ? null : node.arguments[0],
+        },
+        ctx,
+      );
       pushEffect(out, ctx, {
+        ...withOriginRoles(roles),
         effectType: methodLower === 'select' ? 'db_read' : 'db_write',
         op: methodLower,
         table: resolved.symbolic ? resolved.table : resolved.table.toLowerCase(),
@@ -2334,7 +3245,19 @@ function inspectCall(node, out, ctx) {
         : null;
     if (recv && ctx.repoTables.has(recv)) {
       const table = ctx.repoTables.get(recv);
+      // TAPP-0: TypeORM's roles are POSITIONAL and differ per method —
+      // `update(criteria, partial)` splits them, `save(entity)` is data only,
+      // `delete(criteria)` is filter only. Encoded once, in TYPEORM_ARG_ROLES.
+      const shape = TYPEORM_ARG_ROLES[methodLower] ?? { filter: null, data: null };
+      const roles = originRoles(
+        {
+          filter: shape.filter == null ? null : node.arguments[shape.filter],
+          data: shape.data == null ? null : node.arguments[shape.data],
+        },
+        ctx,
+      );
       pushEffect(out, ctx, {
+        ...withOriginRoles(roles),
         effectType: 'db_write',
         op: TYPEORM_WRITE[methodLower],
         table: table || null,
@@ -2369,7 +3292,14 @@ function inspectCall(node, out, ctx) {
       const data = prismaLiteralsOf(node.arguments[0], 'data');
       const where = prismaLiteralsOf(node.arguments[0], 'where');
       const whereNode = optionValueOf(node.arguments[0], 'where');
+      // TAPP-0: the two roles are named by Prisma's own option keys, so this is
+      // the contract's structure, not a guess about argument positions.
+      const roles = originRoles(
+        { filter: whereNode, data: optionValueOf(node.arguments[0], 'data') },
+        ctx,
+      );
       pushEffect(out, ctx, {
+        ...withOriginRoles(roles),
         effectType: op === 'select' ? 'db_read' : 'db_write',
         op,
         table: obj.property.name.toLowerCase(),
@@ -2382,7 +3312,7 @@ function inspectCall(node, out, ctx) {
         // ADR-058 B: object-scope provenance — a query targeting a bare `id`, and whether
         // it is scoped to the caller (an ownership key / a session value). Feeds BOLA.
         ...(whereNode && whereHasIdKey(whereNode) ? { idScoped: true } : {}),
-        ...(whereNode && whereOwnerScoped(whereNode) ? { ownerScoped: true } : {}),
+        ...(whereNode && whereOwnerScoped(whereNode, ctx) ? { ownerScoped: true } : {}),
         line,
       });
       return;
@@ -2413,6 +3343,53 @@ function inspectCall(node, out, ctx) {
     }
   }
 
+  // ---- Mongo driver collection handle (Node Semantic Kernel contract `mongo/driver`).
+  // `const col = db.collection('allocations')` in an enclosing scope, then `col.find(…)`
+  // here. The receiver is CAPTURED, so nothing in this body declares it; the binding
+  // arrives through `ctx.collections`, resolved structurally by kernel/bindings.js.
+  // Matched on the handle binding plus a known op — never on the receiver's name — so a
+  // variable that merely looks db-ish yields nothing. A handle whose collection name was
+  // not a literal keeps `table: null` and is marked symbolic: a target we cannot read is
+  // never invented (SOUNDNESS Direction 2).
+  if (
+    MONGO_COLLECTION_OPS[methodLower] !== undefined &&
+    callee.object.type === 'Identifier' &&
+    ctx.collections?.has(callee.object.name)
+  ) {
+    const handle = ctx.collections.get(callee.object.name);
+    const op = MONGO_COLLECTION_OPS[methodLower];
+    const roles = MONGO_ARG_ROLES[methodLower] ?? { filter: null, data: null };
+    const filterArg = roles.filter == null ? null : node.arguments[roles.filter];
+    const dataArg = roles.data == null ? null : node.arguments[roles.data];
+    // A write is tainted when the value it STORES is request-derived. The filter
+    // is tracked separately (`filterTainted`): a request-chosen filter is what
+    // turns an authenticated write into a horizontal-access problem, and folding
+    // the two into one flag loses exactly that distinction.
+    const where = filterArg ? whereLiteral(filterArg) : null;
+    // TAPP-0: the Mongo contract now goes through the SAME helper as every other
+    // one. It is the witness of non-regression — five ORMs answering one question
+    // must not have five implementations of the answer.
+    const originRoleFacts = originRoles({ filter: filterArg, data: dataArg }, ctx);
+    pushEffect(out, ctx, {
+      ...withOriginRoles(originRoleFacts),
+      effectType: op === 'select' ? 'db_read' : 'db_write',
+      op,
+      ...(handle.table ? { table: handle.table } : {}),
+      ...(handle.symbolic ? { symbolic: true } : {}),
+      ...(where ? { where } : {}),
+      ...(dataArg && valueTainted(dataArg, ctx) ? { tainted: true } : {}),
+      ...(filterArg && valueTainted(filterArg, ctx) ? { filterTainted: true } : {}),
+      // DataSource → DbEffect: WHICH request surfaces reached the filter, and
+      // which reached the stored data. Two separate lists because they answer
+      // two different questions — a client-chosen FILTER is an object-scope
+      // question, a client-chosen PAYLOAD is a validation question.
+      ...(filterArg && whereHasIdKey(filterArg) ? { idScoped: true } : {}),
+      ...(filterArg && whereOwnerScoped(filterArg, ctx) ? { ownerScoped: true } : {}),
+      line,
+    });
+    return;
+  }
+
   // ---- active-record ORM: User.create(...) / User.findAll(...) / User.save(...) — a
   // Capitalized model receiver with a known op (Mongoose / TypeORM active-record /
   // Sequelize). Capitalization is the shared convention and keeps this from firing on
@@ -2426,7 +3403,18 @@ function inspectCall(node, out, ctx) {
     !NON_MODEL_RECEIVER.test(callee.object.name)
   ) {
     const op = MODEL_OPS[methodLower];
+    // TAPP-0: the active-record convention — a read takes an options object whose
+    // `where` selects; a write takes the values first and the options second.
+    const optionsAt = op === 'select' ? 0 : 1;
+    const roles = originRoles(
+      {
+        filter: optionValueOf(node.arguments[optionsAt], 'where'),
+        data: op === 'select' ? null : node.arguments[0],
+      },
+      ctx,
+    );
     pushEffect(out, ctx, {
+      ...withOriginRoles(roles),
       effectType: op === 'select' ? 'db_read' : 'db_write',
       op,
       table: callee.object.name.toLowerCase(),
@@ -2621,6 +3609,29 @@ function pushEffect(out, ctx, effect) {
   if (ctx?.guarded !== true && MUTATING_EFFECTS.has(effect.effectType))
     effect._unguardedPath = true;
   out.effects.push(effect);
+}
+
+// A Mongo filter document's LITERAL pairs — `{ status: 'active' }` → { status:
+// 'active' }. Non-literal values (a variable, a computed expression, a `$where`
+// string built from input) are deliberately absent rather than stringified: a
+// filter we cannot read must not look like a filter we read and found empty.
+// Bounded at 8 pairs like every other literal harvest here.
+function whereLiteral(arg) {
+  if (arg?.type !== 'ObjectExpression') return null;
+  const pairs = {};
+  for (const field of arg.properties) {
+    if (Object.keys(pairs).length >= 8) break;
+    if (
+      field.type === 'ObjectProperty' &&
+      !field.computed &&
+      (field.key.type === 'Identifier' || field.key.type === 'StringLiteral') &&
+      field.value.type === 'StringLiteral'
+    ) {
+      const key = field.key.type === 'Identifier' ? field.key.name : field.key.value;
+      pairs[key.toLowerCase()] = field.value.value.toLowerCase();
+    }
+  }
+  return Object.keys(pairs).length ? pairs : null;
 }
 
 // prisma.order.update({ where: { status: 'PENDING' }, data: { status: 'PAID' } })
@@ -2972,7 +3983,17 @@ function chainVerbOp(node) {
 // `.from(collection)` where `const collection = req.params.collection`) resolves to a
 // SYMBOLIC table (`:table`) — a precise rule, not an unknown — so generic CRUD
 // endpoints stop reading as blind.
-function builderTableOf(node, reqDerived, thisSymbols) {
+// `knex('users')` and `createHash('md5')` are the SAME SHAPE — an identifier
+// called with a string literal. Only where the identifier came from separates
+// them, so a root proven to come from `node:crypto` yields NO builder table.
+//
+// The refusal is LOCAL to this rule on purpose. An earlier attempt returned from
+// `inspectCall` instead, which skipped every later rule for that node: 13 crypto
+// classifications cost twenty 168 real writes, because a crypto chain that is
+// also the receiver of a longer chain dragged real effects down with it. Here the
+// builder rule simply declines, and the active-record, Mongo-collection and
+// opaque-persistence rules all still run on the same call.
+function builderTableOf(node, reqDerived, thisSymbols, nonDbRoots = null) {
   let cur = node;
   const lit = (t) => ({ table: t, symbolic: false });
   for (let hops = 0; hops < 8 && cur; hops++) {
@@ -2984,7 +4005,13 @@ function builderTableOf(node, reqDerived, thisSymbols) {
         c.type === 'MemberExpression' &&
         c.property.type === 'Identifier' &&
         (c.property.name === 'from' || c.property.name === 'into');
-      const isBaseCall = c.type === 'Identifier'; // knex('users') / trx('users')
+      // knex('users') / trx('users') — but the walk has reached a binding this
+      // module PROVED came from node:crypto, so there is no table here. Reported
+      // as a refusal rather than as `null`, so the caller can tell "this rule
+      // declines" from "this shape is not a builder" — they are the same absence
+      // of a table and must not become the same absence of an effect.
+      if (c.type === 'Identifier' && nonDbRoots?.has(c.name)) return { nonDb: true };
+      const isBaseCall = c.type === 'Identifier';
       const isThisCall =
         c.type === 'MemberExpression' && c.object.type === 'ThisExpression';
       if (isTableMethod || isBaseCall || isThisCall) {
