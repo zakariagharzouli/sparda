@@ -40,6 +40,8 @@ import {
   publishedCheck,
   registryUrlFor,
   MANIFEST_FIELDS,
+  congruenceCheck,
+  workflowArchitectureChecks,
 } from './release-checks.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -191,9 +193,30 @@ const tagged = tagChecks(tag, {
   remoteReachable,
 });
 add(tagged);
-if (!tagged.length) ok(`${tag} exists, points at HEAD, and is pushed to origin`);
+// --- 6. Trusted Publishing Architecture (OIDC + Congruence) ------------------------
+let originUrl = 'UNKNOWN';
+try {
+  originUrl = run('git', ['remote', 'get-url', 'origin'], { stdio: 'pipe' });
+} catch {
+  // UNKNOWN handled in congruenceCheck
+}
+const repoUrl = pkg.repository?.url ?? '';
+const congruence = congruenceCheck({ repositoryUrl: repoUrl, remoteOrigin: originUrl });
+add(congruence);
+if (!congruence.length) ok('repository origin matches package.json (public mirror)');
 
-// --- 6. the ordinary bar, restated ------------------------------------------------
+let workflowYaml = '';
+try {
+  workflowYaml = fs.readFileSync(
+    path.join(repo, '.github/workflows/release.yml'),
+    'utf8',
+  );
+} catch {}
+const architecture = workflowArchitectureChecks(workflowYaml);
+add(architecture);
+if (!architecture.length) ok('workflow configured for NPM Trusted Publishing');
+
+// --- 7. the ordinary bar, restated ------------------------------------------------
 const step = (label, script, args = []) => {
   process.stdout.write(`  … ${label}\r`);
   try {

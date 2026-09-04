@@ -1,0 +1,38 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "twenty-billing-checkout",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "multi-guard-billing-mutation",
+  "route": {
+    "method": "POST",
+    "path": "/graphql/checkoutSession"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "The resolver and its outbound side effect are extracted; nested Nest guards and permission checks make this a difficult precision case."
+  },
+  "origin": {
+    "repository": "twentyhq/twenty",
+    "url": "https://github.com/twentyhq/twenty",
+    "corpus": "twenty",
+    "appDir": "packages/twenty-server",
+    "commit": "590ae069e8aadd6a4df1738fd3a47ce7d380b250",
+    "source": [
+      {
+        "path": "packages/twenty-server/src/engine/core-modules/billing/billing.resolver.ts",
+        "sha256": "d0fd2dc64b4e8b94aa4d5f165919f17fb835813dc0fd7ab895577e3cca059e75",
+        "fingerprint": "d0fd2dc64b4e8b94aa4d5f165919f17fb835813dc0fd7ab895577e3cca059e75"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "A billing checkout creation is safe for the tested unauthorized-action property when workspace, user and no-permission guards all precede the action and the service rechecks workspace permissions.",
+    "why": "checkoutSession has WorkspaceAuthGuard, UserAuthGuard and NoPermissionGuard, then calls validateCanCheckoutSessionPermissionOrThrow before requesting a checkout URL."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

@@ -39,10 +39,17 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { compileUBG } from '../src/ubg/compile.js';
-import { canonicalizeGraph } from '../src/ubg/schema.js';
+import { canonicalizeGraph, cmp } from '../src/ubg/schema.js';
 import { checkGraph, verdictOf, verdictState } from '../src/ubg/apocalypse.js';
 import { surveyBlindspots } from '../src/ubg/blindspots.js';
-import { premiseFor, withPremiseGaps, basisFrom } from '../src/ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps, basisFrom } from '../src/ubg/premise.js';
+import {
+  dataFlowCoverageOf,
+  originCoverageOf,
+  providerLinkageOf,
+  routeRiskOf,
+  setDelta,
+} from './route-risk.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT = path.join(here, '..', 'corpus.snapshot.json');
@@ -58,6 +65,15 @@ const APPS = [
   // (`suggestAppDirs` points here), and a corpus entry that cannot compile checks nothing
   { name: 'nocodb', dir: 'nocodb/packages/nocodb' },
   { name: 'ghostfolio', dir: 'ghostfolio' },
+  // TAPP-2's subject, and the reason it is here rather than in a fixture only.
+  // NodeGoat is the one pinned app whose entire request-to-effect path crosses a
+  // call boundary — route → handler factory → captured DAO instance → positional
+  // parameter → Mongo. Six giants produce ZERO resolved access paths, so without
+  // this entry `npm run corpus` would print "0 drifted" the day the
+  // interprocedural seam silently stopped resolving: the exact shape of the #47
+  // failure, one capability later. It is small, so the cost is a second of
+  // compile; it is the only place the gate can see this capability at all.
+  { name: 'nodegoat', dir: 'nodegoat' },
 ];
 
 // The metrics we pin. Chosen to be drift-SENSITIVE (they move when precision moves) and
@@ -70,7 +86,9 @@ async function metricsOf(appDir) {
   // EXECUTES the target's code, and the corpus is seven third-party apps compiled in bulk
   // — the one place SPARDA must never boot what it measures. The boot-free convention
   // oracle costs a directory walk and runs on every lowering that has one.
-  const premise = await premiseFor(g, report, { cwd: appDir });
+  const premise = await certifiableOrgan('corpus-oracle').premise(g, report, {
+    cwd: appDir,
+  });
   // gaps enter the blind-spot ledger at critical risk, exactly as in every command: one
   // channel, so coverage here means the same thing it means on the badge
   const b = surveyBlindspots(g, withPremiseGaps(report, premise));
@@ -120,6 +138,40 @@ async function metricsOf(appDir) {
     guards: guards.length,
     guardsVerified: guards.filter((n) => n.meta.verified).length,
     coverage: Math.round(b.coverage.ratio * 1000) / 10, // one decimal %
+    // The route-scoped risk result PR #47 introduced. Pinned as a SET, not a
+    // total: 73 blocked routes becoming 73 different blocked routes is a change
+    // in the analysis that no count can see. `blocked: null` means the lowering
+    // has no ledger and the question was never asked — never "nothing is blocked".
+    routeRisk: routeRiskOf({
+      framework: report.framework,
+      byRisk: b.byRisk,
+      spots: b.spots,
+    }),
+    // TAPP-0: how much request→effect origin linkage this app actually has, and
+    // in which of the three states. Pinned as a SET for the same reason
+    // `routeRisk.blocked` is: the same number of links over different
+    // occurrences is a changed analysis that no count can see.
+    originCoverage: originCoverageOf(
+      (report.kernel?.facts ?? []).filter((f) => f.kind === 'DbEffectOccurrence'),
+    ),
+    // TAPP-1: through WHAT a request value reached a role, on which route. Pinned
+    // as a SET alongside its counts, so a resolved path quietly becoming a declared
+    // boundary — or the reverse — is drift the gate reports instead of averaging away.
+    // ADR-102: how much route→provider→ORM linkage this app's SOURCE proves, and
+    // how much it declines. Both halves are pinned: a zero that stops being a
+    // zero, and a refusal set that stops being refused, are the two ways this
+    // capability can go wrong.
+    providerLinkage: providerLinkageOf({
+      framework: report.framework,
+      linkages: (report.kernel?.facts ?? []).filter((f) => f.kind === 'ProviderLinkage'),
+      boundaries: (report.kernel?.facts ?? []).filter(
+        (f) => f.kind === 'UnknownBoundary' && f.provenance?.contract === 'nest/provider',
+      ),
+    }),
+    dataFlowPaths: dataFlowCoverageOf(
+      (report.kernel?.facts ?? []).filter((f) => f.kind === 'DataFlowPath'),
+      (report.kernel?.facts ?? []).filter((f) => f.kind === 'DbEffectOccurrence'),
+    ),
   };
   return { m, gapRoutes };
 }
@@ -130,7 +182,11 @@ async function metricsOf(appDir) {
 // anything. Absent for a non-git corpus; the oracle degrades to its old, blind behaviour.
 function pinnedHead(appDir) {
   try {
-    const out = execFileSync('git', ['-C', appDir, 'log', '-1', '--format=%h %cs'], {
+    // %H, not %h: an ABBREVIATION is not a pin. `--update` rewrote every stored
+    // full sha down to 7 characters on each run, so the provenance degraded a
+    // little every time anyone re-baselined, and `git fetch <sha>` cannot resolve
+    // an abbreviation (E-098).
+    const out = execFileSync('git', ['-C', appDir, 'log', '-1', '--format=%H %cs'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
@@ -153,13 +209,55 @@ function reportGaps(routes) {
   if ((routes ?? []).length > 5) console.log(`        … and ${routes.length - 5} more`);
 }
 
+// Two spellings of one commit: a full sha and any abbreviation of it.
+const sameCommit = (a, b) =>
+  Boolean(a) && Boolean(b) && (a.startsWith(b) || b.startsWith(a));
+
 function diff(exp, got) {
   const deltas = [];
-  for (const k of Object.keys(exp)) {
+  // The UNION of both key sets, not just the snapshot's. Iterating only `exp`
+  // makes a NEWLY PRODUCED metric invisible until someone baselines it — which is
+  // exactly how the route-risk dimension could be added, produce a real result,
+  // and still report "0 drifted". A gate that cannot see a new measurement cannot
+  // see a deleted one either.
+  for (const k of [...new Set([...Object.keys(exp), ...Object.keys(got)])].sort(cmp)) {
     if (k.startsWith('_')) continue; // provenance, not a metric
     const a = JSON.stringify(exp[k]);
     const bb = JSON.stringify(got[k]);
-    if (a !== bb) deltas.push(`    ${k}: ${a} → ${bb}`);
+    if (a === bb) continue;
+    // A 73-element array printed as `a → b` is a diff nobody reads, and a diff
+    // nobody reads is a gate nobody can act on. Set-valued metrics report which
+    // members moved.
+    const setKey =
+      k === 'routeRisk'
+        ? 'blocked'
+        : k === 'originCoverage'
+          ? 'linked'
+          : k === 'dataFlowPaths'
+            ? 'paths'
+            : k === 'providerLinkage'
+              ? 'linked'
+              : null;
+    const moved = setKey ? setDelta(exp[k]?.[setKey], got[k]?.[setKey]) : null;
+    if (moved && (moved.removed.length || moved.added.length)) {
+      deltas.push(
+        `    ${k}.${setKey}: ${exp[k][setKey].length} → ${got[k][setKey].length}`,
+      );
+      for (const r of moved.removed.slice(0, 8)) deltas.push(`      - ${r}`);
+      if (moved.removed.length > 8)
+        deltas.push(`      - …${moved.removed.length - 8} more removed`);
+      for (const r of moved.added.slice(0, 8)) deltas.push(`      + ${r}`);
+      if (moved.added.length > 8)
+        deltas.push(`      + …${moved.added.length - 8} more added`);
+      const restExp = { ...exp[k], [setKey]: null };
+      const restGot = { ...got[k], [setKey]: null };
+      if (JSON.stringify(restExp) !== JSON.stringify(restGot))
+        deltas.push(
+          `    ${k} (rest): ${JSON.stringify(restExp)} → ${JSON.stringify(restGot)}`,
+        );
+      continue;
+    }
+    deltas.push(`    ${k}: ${a} → ${bb}`);
   }
   return deltas;
 }
@@ -223,7 +321,11 @@ for (const app of APPS) {
     for (const d of deltas) console.log(d);
     // Attribution, not a verdict: the reader must know whether the tree under measurement
     // is the one the numbers were taken on before deciding this drift means anything.
-    if (head && exp._pinned && head.commit !== exp._pinned.commit)
+    // Compared by PREFIX: the snapshot stores the full 40-char sha, `git log -1
+    // --format=%h` yields an abbreviation, and comparing them as strings made this
+    // line fire on every drift — an attribution signal that is always on tells the
+    // reader nothing, and during a real investigation it actively misleads.
+    if (head && exp._pinned && !sameCommit(head.commit, exp._pinned.commit))
       console.log(
         `    (corpus moved: baselined on ${exp._pinned.commit} ${exp._pinned.date}, measured on ${head.commit} ${head.date} — attribute before re-baselining)`,
       );

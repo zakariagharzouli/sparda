@@ -1,0 +1,6 @@
+{
+  "name": "@fixture/api",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "dependencies": { "express": "4.18.2", "@fixture/services": "1.0.0" }
+}

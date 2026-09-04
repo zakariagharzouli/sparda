@@ -19,7 +19,7 @@ import {
   buildProofObjects,
 } from '../ubg/apocalypse.js';
 import { surveyBlindspots, coveragePct } from '../ubg/blindspots.js';
-import { premiseFor, withPremiseGaps, basisFrom } from '../ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps, basisFrom } from '../ubg/premise.js';
 import { atomicWriteFileSync as atomicWrite } from '../server/persistence.js';
 
 // version travels with the proof so an audit knows which prover produced it
@@ -74,7 +74,7 @@ export async function runApocalypse(opts) {
   // decides whether a tree ships — so it is the last place that may certify an app whose
   // route table nobody checked. `premiseFor` keeps the opt-in boundary: the runtime
   // oracle needs `--probe`, the boot-free convention oracle always runs.
-  const premise = await premiseFor(canonical, report, {
+  const premise = await certifiableOrgan('apocalypse').premise(canonical, report, {
     cwd: opts.cwd,
     probe: opts.probe,
   });

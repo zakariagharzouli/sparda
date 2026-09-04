@@ -5,6 +5,7 @@
     "premiseOracle": "convention",
     "premiseProbed": 591,
     "premiseGaps": 0,
+    "premiseBasis": "measured",
     "findings": 75,
     "advisories": 52,
     "findingsByRule": {
@@ -20,8 +21,45 @@
     "guards": 516,
     "guardsVerified": 516,
     "coverage": 97.9,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 2,
+        "high": 10,
+        "medium": 8,
+        "low": 0
+      },
+      "blocked": null,
+      "blockedByCause": null
+    },
+    "originCoverage": {
+      "occurrences": 866,
+      "filter": {
+        "linked": 0,
+        "empty": 793,
+        "unmeasured": 73
+      },
+      "data": {
+        "linked": 0,
+        "empty": 194,
+        "unmeasured": 672
+      },
+      "linked": []
+    },
+    "providerLinkage": {
+      "linked": null,
+      "withEffect": null,
+      "declined": null,
+      "byReason": null
+    },
+    "dataFlowPaths": {
+      "facts": 0,
+      "resolved": 0,
+      "unknown": 0,
+      "unmeasuredRoles": 745,
+      "paths": []
+    },
     "_pinned": {
-      "commit": "bbc533e",
+      "commit": "bbc533ed6d0de62a9a23d2e7091da94f6c7b4db8",
       "date": "2026-07-26"
     }
   },
@@ -31,19 +69,59 @@
     "premiseOracle": "convention",
     "premiseProbed": 365,
     "premiseGaps": 0,
+    "premiseBasis": "measured",
     "findings": 4,
-    "advisories": 15,
+    "advisories": 3,
     "findingsByRule": {
-      "IRREVERSIBLE_OBSERVABLE": 6,
-      "UNGUARDED_MUTATION": 13
+      "IRREVERSIBLE_OBSERVABLE": 1,
+      "UNGUARDED_MUTATION": 6
     },
-    "dbWrites": 132,
-    "dbReads": 1464,
+    "dbWrites": 81,
+    "dbReads": 1480,
     "guards": 782,
     "guardsVerified": 411,
-    "coverage": 15.1,
+    "coverage": 12.3,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 46,
+        "medium": 1438,
+        "low": 372
+      },
+      "blocked": [],
+      "blockedByCause": {}
+    },
+    "originCoverage": {
+      "occurrences": 1877,
+      "filter": {
+        "linked": 0,
+        "empty": 0,
+        "unmeasured": 1877
+      },
+      "data": {
+        "linked": 0,
+        "empty": 60,
+        "unmeasured": 1817
+      },
+      "linked": []
+    },
+    "providerLinkage": {
+      "linked": [],
+      "withEffect": 0,
+      "declined": 61,
+      "byReason": {
+        "unresolved-provider": 61
+      }
+    },
+    "dataFlowPaths": {
+      "facts": 0,
+      "resolved": 0,
+      "unknown": 0,
+      "unmeasuredRoles": 3694,
+      "paths": []
+    },
     "_pinned": {
-      "commit": "00e7b5c",
+      "commit": "00e7b5cb8a09d199e15baec7f4b469661b6817ed",
       "date": "2026-07-27"
     }
   },
@@ -53,21 +131,60 @@
     "premiseOracle": "convention",
     "premiseProbed": 1,
     "premiseGaps": 0,
-    "findings": 12,
-    "advisories": 4,
+    "premiseBasis": "measured",
+    "findings": 10,
+    "advisories": 3,
     "findingsByRule": {
       "AGGREGATE_MEMBER_BYPASS": 3,
-      "IRREVERSIBLE_OBSERVABLE": 2,
-      "UNGUARDED_MUTATION": 2,
+      "IRREVERSIBLE_OBSERVABLE": 1,
       "UNVALIDATED_CONSTRAINED_WRITE": 9
     },
-    "dbWrites": 36,
+    "dbWrites": 26,
     "dbReads": 99,
     "guards": 436,
     "guardsVerified": 252,
-    "coverage": 94.3,
+    "coverage": 93.7,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 16,
+        "medium": 0,
+        "low": 184
+      },
+      "blocked": [],
+      "blockedByCause": {}
+    },
+    "originCoverage": {
+      "occurrences": 169,
+      "filter": {
+        "linked": 0,
+        "empty": 163,
+        "unmeasured": 6
+      },
+      "data": {
+        "linked": 0,
+        "empty": 23,
+        "unmeasured": 146
+      },
+      "linked": []
+    },
+    "providerLinkage": {
+      "linked": [],
+      "withEffect": 0,
+      "declined": 26,
+      "byReason": {
+        "unresolved-provider": 26
+      }
+    },
+    "dataFlowPaths": {
+      "facts": 0,
+      "resolved": 0,
+      "unknown": 0,
+      "unmeasuredRoles": 152,
+      "paths": []
+    },
     "_pinned": {
-      "commit": "3894f37",
+      "commit": "3894f37e14eae5082770f35ff1fde72110c0e6b6",
       "date": "2026-07-22"
     }
   },
@@ -77,18 +194,135 @@
     "premiseOracle": "convention",
     "premiseProbed": 122,
     "premiseGaps": 0,
+    "premiseBasis": "measured",
     "findings": 14,
     "advisories": 17,
     "findingsByRule": {
       "IRREVERSIBLE_OBSERVABLE": 31
     },
-    "dbWrites": 812,
+    "dbWrites": 644,
     "dbReads": 90,
     "guards": 1868,
     "guardsVerified": 583,
-    "coverage": 77,
+    "coverage": 72.3,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 219,
+        "medium": 117,
+        "low": 1285
+      },
+      "blocked": [
+        "unresolved-workspace-module:twenty-shared entrypoint:DELETE /rest/metadata/viewFields/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:DELETE /rest/metadata/viewFilterGroups/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:DELETE /rest/metadata/viewFilters/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:DELETE /rest/metadata/viewGroups/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:DELETE /rest/metadata/viewSorts/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:DELETE /rest/metadata/views/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /application-registration-claim/github/callback",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /auth/apps/authorize",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /auth/apps/callback",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /auth/google-apis/get-access-token",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /auth/microsoft-apis/get-access-token",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /auth/oauth-propagator/callback",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /files/application-registrations/:applicationRegistrationId/*path",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/apiKey",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/applicationRegistrationTarballUrl",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/applicationSdkClientChecksums",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/currentUser",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/eventLogsLive",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/findManyLogicFunctions",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/findOneLogicFunction",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/getAdminAiUsageByWorkspace",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/getConnectedImapSmtpCaldavAccount",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/getMaintenanceMode",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/getPublicWorkspaceDataByDomain",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/getPublicWorkspaceDataById",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/getUsageAnalytics",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/logicFunctionLogs",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/mostlyEmptyFieldMetadataIds",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/onAgentChatEvent",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /graphql/onEventSubscription",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/fields",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/pageLayoutTabs",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/pageLayouts",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/viewFields/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/viewFilterGroups/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/viewFilters/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/viewGroups/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/viewSorts/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/metadata/views/:id",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/sdk-client/:applicationId/:moduleName",
+        "unresolved-workspace-module:twenty-shared entrypoint:GET /rest/sdk-client/:applicationId/:moduleName/:checksum",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /app/billing/charge",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/addQueryToEventStream",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/answerAgentChatQuestion",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/checkCustomDomainValidRecords",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/checkPublicDomainValidRecords",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/createOneField",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/createOneIndex",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/deleteOneField",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/deleteQueuedChatMessage",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/deleteUserFromWorkspace",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/deleteView",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/deleteViewFilterGroup",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/destroyView",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/destroyViewFilterGroup",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/getLoginTokenFromCredentials",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/initiateOTPProvisioning",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/initiateOTPProvisioningForAuthenticatedUser",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/removeQueryFromEventStream",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/saveImapSmtpCaldavAccount",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/sendChatMessage",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/sendEmail",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/stopAgentChatStream",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/updateApplication",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/updateMessageChannel",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/updateWorkspace",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /graphql/updateWorkspaceMemberSettings",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /mcp",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /webhooks/messaging/ses/inbound",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /webhooks/messaging/ses/outbound",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /webhooks/microsoft/calendar",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /webhooks/microsoft/messaging",
+        "unresolved-workspace-module:twenty-shared entrypoint:POST /webhooks/server/:resolverLogicFunctionUniversalIdentifier"
+      ],
+      "blockedByCause": {
+        "unresolved-workspace-module:twenty-shared": 73
+      }
+    },
+    "originCoverage": {
+      "occurrences": 1199,
+      "filter": {
+        "linked": 0,
+        "empty": 321,
+        "unmeasured": 878
+      },
+      "data": {
+        "linked": 0,
+        "empty": 874,
+        "unmeasured": 325
+      },
+      "linked": []
+    },
+    "providerLinkage": {
+      "linked": [],
+      "withEffect": 0,
+      "declined": 47,
+      "byReason": {
+        "unresolved-module": 19,
+        "unresolved-provider": 28
+      }
+    },
+    "dataFlowPaths": {
+      "facts": 0,
+      "resolved": 0,
+      "unknown": 0,
+      "unmeasuredRoles": 1203,
+      "paths": []
+    },
     "_pinned": {
-      "commit": "590ae069",
+      "commit": "590ae069e8aadd6a4df1738fd3a47ce7d380b250",
       "date": "2026-07-27"
     }
   },
@@ -98,40 +332,140 @@
     "premiseOracle": "convention",
     "premiseProbed": 235,
     "premiseGaps": 0,
+    "premiseBasis": "measured",
     "findings": 0,
     "advisories": 7,
     "findingsByRule": {
       "IRREVERSIBLE_OBSERVABLE": 2,
       "UNGUARDED_MUTATION": 5
     },
-    "dbWrites": 452,
+    "dbWrites": 447,
     "dbReads": 239,
     "guards": 459,
     "guardsVerified": 459,
-    "coverage": 55.9,
+    "coverage": 55.6,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 313,
+        "medium": 19,
+        "low": 0
+      },
+      "blocked": [],
+      "blockedByCause": {}
+    },
+    "originCoverage": {
+      "occurrences": 1110,
+      "filter": {
+        "linked": 0,
+        "empty": 0,
+        "unmeasured": 1110
+      },
+      "data": {
+        "linked": 0,
+        "empty": 0,
+        "unmeasured": 1110
+      },
+      "linked": []
+    },
+    "providerLinkage": {
+      "linked": [],
+      "withEffect": 0,
+      "declined": 2,
+      "byReason": {
+        "unresolved-provider": 2
+      }
+    },
+    "dataFlowPaths": {
+      "facts": 0,
+      "resolved": 0,
+      "unknown": 0,
+      "unmeasuredRoles": 2220,
+      "paths": []
+    },
     "_pinned": {
-      "commit": "3606144",
+      "commit": "3606144190f14fd68bbad89675d7b9da47c15f75",
       "date": "2026-07-26"
     }
   },
   "nocodb": {
-    "verdict": "PREMISE_GAP",
-    "routes": 566,
+    "verdict": "NOT_PROVEN",
+    "routes": 585,
     "premiseOracle": "convention",
     "premiseProbed": 78,
-    "premiseGaps": 1,
+    "premiseGaps": 0,
+    "premiseBasis": "measured",
     "findings": 13,
     "advisories": 0,
     "findingsByRule": {
       "IRREVERSIBLE_OBSERVABLE": 13
     },
-    "dbWrites": 64,
+    "dbWrites": 63,
     "dbReads": 5,
     "guards": 899,
     "guardsVerified": 9,
-    "coverage": 47.6,
+    "coverage": 48.4,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 212,
+        "medium": 0,
+        "low": 890
+      },
+      "blocked": [],
+      "blockedByCause": {}
+    },
+    "originCoverage": {
+      "occurrences": 130,
+      "filter": {
+        "linked": 0,
+        "empty": 0,
+        "unmeasured": 130
+      },
+      "data": {
+        "linked": 9,
+        "empty": 112,
+        "unmeasured": 9
+      },
+      "linked": [
+        "entrypoint:POST /api/v1/auth/password/change data session.*",
+        "entrypoint:POST /api/v1/auth/user/signin data session.*",
+        "entrypoint:POST /api/v1/db/auth/password/change data session.*",
+        "entrypoint:POST /api/v1/db/auth/user/signin data session.*",
+        "entrypoint:POST /api/v2/auth/password/change data session.*",
+        "entrypoint:POST /api/v2/auth/user/signin data session.*",
+        "entrypoint:POST /auth/google/genTokenByCode data session.*",
+        "entrypoint:POST /auth/user/signin data session.*",
+        "entrypoint:POST /user/password/change data session.*"
+      ]
+    },
+    "providerLinkage": {
+      "linked": [],
+      "withEffect": 0,
+      "declined": 1,
+      "byReason": {
+        "unresolved-provider": 1
+      }
+    },
+    "dataFlowPaths": {
+      "facts": 9,
+      "resolved": 0,
+      "unknown": 9,
+      "unmeasuredRoles": 139,
+      "paths": [
+        "entrypoint:POST /api/v1/auth/password/change data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /api/v1/auth/user/signin data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /api/v1/db/auth/password/change data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /api/v1/db/auth/user/signin data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /api/v2/auth/password/change data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /api/v2/auth/user/signin data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /auth/google/genTokenByCode data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /auth/user/signin data session.* → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /user/password/change data session.* → UNKNOWN_ACCESS_PATH"
+      ]
+    },
     "_pinned": {
-      "commit": "64bf196",
+      "commit": "64bf196653bf358d85e6e2fa1bb8b38f4bab306c",
       "date": "2026-07-24"
     }
   },
@@ -141,6 +475,7 @@
     "premiseOracle": "convention",
     "premiseProbed": 115,
     "premiseGaps": 0,
+    "premiseBasis": "measured",
     "findings": 1,
     "advisories": 5,
     "findingsByRule": {
@@ -154,9 +489,126 @@
     "guards": 193,
     "guardsVerified": 98,
     "coverage": 76,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 30,
+        "medium": 0,
+        "low": 95
+      },
+      "blocked": [],
+      "blockedByCause": {}
+    },
+    "originCoverage": {
+      "occurrences": 94,
+      "filter": {
+        "linked": 0,
+        "empty": 75,
+        "unmeasured": 19
+      },
+      "data": {
+        "linked": 0,
+        "empty": 23,
+        "unmeasured": 71
+      },
+      "linked": []
+    },
+    "providerLinkage": {
+      "linked": [],
+      "withEffect": 0,
+      "declined": 34,
+      "byReason": {
+        "unresolved-provider": 34
+      }
+    },
+    "dataFlowPaths": {
+      "facts": 0,
+      "resolved": 0,
+      "unknown": 0,
+      "unmeasuredRoles": 90,
+      "paths": []
+    },
     "_pinned": {
-      "commit": "ce35588",
+      "commit": "ce35588e58a53ff696550595b760a2e2afef3124",
       "date": "2026-07-26"
+    }
+  },
+  "nodegoat": {
+    "verdict": "PARTIAL",
+    "routes": 19,
+    "premiseOracle": null,
+    "premiseProbed": 0,
+    "premiseGaps": 0,
+    "premiseBasis": "unmeasured",
+    "findings": 0,
+    "advisories": 3,
+    "findingsByRule": {
+      "OBJECT_SCOPE_UNPROVEN": 2,
+      "UNGUARDED_MUTATION": 1
+    },
+    "dbWrites": 5,
+    "dbReads": 11,
+    "guards": 1,
+    "guardsVerified": 0,
+    "coverage": 47.6,
+    "routeRisk": {
+      "byRisk": {
+        "critical": 0,
+        "high": 22,
+        "medium": 0,
+        "low": 1
+      },
+      "blocked": [],
+      "blockedByCause": {}
+    },
+    "originCoverage": {
+      "occurrences": 18,
+      "filter": {
+        "linked": 8,
+        "empty": 8,
+        "unmeasured": 2
+      },
+      "data": {
+        "linked": 1,
+        "empty": 4,
+        "unmeasured": 13
+      },
+      "linked": [
+        "entrypoint:GET /allocations/:userId filter params.userId",
+        "entrypoint:GET /allocations/:userId filter query.threshold",
+        "entrypoint:GET /contributions filter session.userId",
+        "entrypoint:POST /benefits data body.benefitStartDate",
+        "entrypoint:POST /benefits filter body.userId",
+        "entrypoint:POST /contributions filter session.userId",
+        "entrypoint:POST /login filter body.userName",
+        "entrypoint:POST /signup filter body.userName"
+      ]
+    },
+    "providerLinkage": {
+      "linked": null,
+      "withEffect": null,
+      "declined": null,
+      "byReason": null
+    },
+    "dataFlowPaths": {
+      "facts": 10,
+      "resolved": 4,
+      "unknown": 6,
+      "unmeasuredRoles": 15,
+      "paths": [
+        "entrypoint:GET /allocations/:userId filter params.userId → UNKNOWN_ACCESS_PATH",
+        "entrypoint:GET /allocations/:userId filter query.threshold → UNKNOWN_ACCESS_PATH",
+        "entrypoint:GET /contributions filter session.userId → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /benefits data req.body.benefitStartDate → benefitStartDate → BenefitsDAO.updateBenefits(#1) → startDate → data.$set.benefitStartDate",
+        "entrypoint:POST /benefits filter req.body.userId → userId → BenefitsDAO.updateBenefits(#0) → userId → parseInt() → filter._id",
+        "entrypoint:POST /contributions filter session.userId → UNKNOWN_ACCESS_PATH",
+        "entrypoint:POST /login filter req.body.userName → userName → UserDAO.validateLogin(#0) → userName → filter.userName",
+        "entrypoint:POST /signup filter req.body.userName → userName → UserDAO.getUserByUserName(#0) → userName → filter.userName"
+      ]
+    },
+    "_pinned": {
+      "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+      "date": "2023-06-21"
     }
   }
 }

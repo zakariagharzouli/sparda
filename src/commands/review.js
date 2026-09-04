@@ -20,7 +20,7 @@ import { compileUBG } from '../ubg/compile.js';
 import { canonicalizeGraph, cmp } from '../ubg/schema.js';
 import { checkGraph, diffGraphs, verdictOf } from '../ubg/apocalypse.js';
 import { surveyBlindspots, coveragePct } from '../ubg/blindspots.js';
-import { premiseFor, withPremiseGaps } from '../ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps } from '../ubg/premise.js';
 
 const ICONS = { critical: '✗', high: '✗', medium: '⚠', info: '·' };
 const err = (message, hint) => Object.assign(new Error(message), { code: 'USER', hint });
@@ -119,7 +119,7 @@ export async function runReview(opts) {
   const baseGraph = compileAtRef(cwd, base, opts);
 
   // the PR gate is a gate: it may not pass a diff whose subject SPARDA never had
-  const premise = await premiseFor(candidate, compiled.report, {
+  const premise = await certifiableOrgan('review').premise(candidate, compiled.report, {
     cwd,
     probe: opts.probe,
   });

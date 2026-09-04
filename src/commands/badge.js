@@ -10,7 +10,7 @@ import { compileUBG } from '../ubg/compile.js';
 import { canonicalizeGraph } from '../ubg/schema.js';
 import { checkGraph, verdictOf, badgeFor } from '../ubg/apocalypse.js';
 import { surveyBlindspots, coveragePct } from '../ubg/blindspots.js';
-import { premiseFor, withPremiseGaps, basisFrom } from '../ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps, basisFrom } from '../ubg/premise.js';
 
 export async function runBadge(opts) {
   const { graph, report } = compileUBG(opts.cwd, { write: false });
@@ -19,7 +19,7 @@ export async function runBadge(opts) {
   // A badge is the artifact that leaves the repo. It may not read green over an app
   // whose route table was never checked — that is the one place a false claim travels
   // furthest and is hardest to retract.
-  const premise = await premiseFor(canonical, report, {
+  const premise = await certifiableOrgan('badge').premise(canonical, report, {
     cwd: opts.cwd,
     probe: opts.probe,
   });

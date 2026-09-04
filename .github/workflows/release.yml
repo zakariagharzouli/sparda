@@ -9,6 +9,10 @@ jobs:
   release:
     name: Publish Release
     runs-on: ubuntu-latest
+    if: github.repository == 'zakariagharzouli/sparda'
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -19,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.14.0
           registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Python
@@ -27,29 +31,28 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@11.5.1
+
       - name: Install dependencies
         run: npm ci
 
       - name: Run Release Gate
         run: npm run release:check
 
-      # Read through `env:`, never interpolated into the script body: `${{ secrets.X }}` inside
-      # a `run:` block writes the secret's characters into the shell script on the runner, where
-      # a value containing quotes or backticks is a command, not a string.
+      # VSCE_PAT is required for the VS Code Marketplace extension publish.
+      # NPM Trusted Publishing relies on OIDC id-token without static secrets.
       - name: Check secrets
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
-          if [ -z "$NPM_TOKEN" ] || [ -z "$VSCE_PAT" ]; then
-            echo "UNVERIFIED: NPM_TOKEN or VSCE_PAT is not set — refusing to report a release we cannot perform."
+          if [ -z "$VSCE_PAT" ]; then
+            echo "UNVERIFIED: VSCE_PAT is not set — refusing to report a release we cannot perform."
             exit 1
           fi
 
       - name: Publish to NPM
-        run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
 
       # `@vscode/vsce`, pinned: the bare `vsce` package is the deprecated old name, and an
       # unpinned `npx` resolves whatever is newest at publish time — the one moment the toolchain

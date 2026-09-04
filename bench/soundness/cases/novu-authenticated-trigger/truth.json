@@ -1,0 +1,38 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "novu-authenticated-trigger",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "class-and-method-permission-guard",
+  "route": {
+    "method": "POST",
+    "path": "/trigger"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "The controller route is extracted while authentication is inherited from a class decorator and authorization from a method decorator."
+  },
+  "origin": {
+    "repository": "novuhq/novu",
+    "url": "https://github.com/novu/novu",
+    "corpus": "novu",
+    "appDir": ".",
+    "commit": "00e7b5cb8a09d199e15baec7f4b469661b6817ed",
+    "source": [
+      {
+        "path": "apps/api/src/app/events/events.controller.ts",
+        "sha256": "c27954299ced06181ae738194b19766a425c923a1d2e63bcbd9567573f9ff605",
+        "fingerprint": "311001e4196c207f7a075ee0d0cb237dd7c1e962e7de2137009dddb51ffa343c"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "An event-trigger mutation is safe for the tested unauthorized-action property when the controller requires authentication and the method requires EVENT_WRITE permission.",
+    "why": "EventsController carries RequireAuthentication and trigger carries RequirePermissions(EVENT_WRITE) before it dispatches ParseEventRequest."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

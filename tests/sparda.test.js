@@ -336,7 +336,19 @@ describe('SPARDA Test Suite', () => {
   // ==========================================
   describe('Injection and Remove Idempotency', () => {
     const testFixture = (fixtureName, entryFile, moduleType) => {
-      const cwd = path.join(FIXTURES_DIR, fixtureName);
+      // E-113, second reader. This round trip used to run IN the shared fixture
+      // directory, and for its duration `src/sparda-router.js` + `src/app.js.sparda-tmp`
+      // exist in the git working tree. `tests/premise-convention.test.js` audits, from a
+      // parallel worker, that every file under `tests/fixtures/` is tracked by git — so
+      // the whole suite went red at random on files that were correct and transient.
+      // E-113's first fix was reader-side (skip `.sparda/` when copying); that argument
+      // does not extend here, because the audit's JOB is to notice untracked files, and
+      // teaching it a new exemption per generated artefact is how a real untracked fixture
+      // eventually hides. A temp copy is still a real tree — the byte-for-byte claim below
+      // is unchanged — and it removes the race for every reader at once.
+      const cwd = path.join(__dirname, '.tmp', `inject-${fixtureName}`);
+      fs.rmSync(cwd, { recursive: true, force: true });
+      copyFixture(path.join(FIXTURES_DIR, fixtureName), cwd);
       const entryAbs = path.resolve(cwd, entryFile);
       const gi = path.join(cwd, '.gitignore');
       const giExisted = fs.existsSync(gi);
@@ -422,6 +434,8 @@ describe('SPARDA Test Suite', () => {
       // 7. Verify byte-by-byte comparison
       const restoredBytes = fs.readFileSync(entryAbs);
       expect(Buffer.compare(originalBytes, restoredBytes)).toBe(0);
+
+      fs.rmSync(cwd, { recursive: true, force: true });
     };
 
     it('should inject, remain idempotent, and remove Express ESM byte-for-byte', () => {
@@ -491,7 +505,11 @@ describe('SPARDA Test Suite', () => {
     });
 
     const testFastAPIFixture = (fixtureName, entryFile) => {
-      const cwd = path.join(FIXTURES_DIR, fixtureName);
+      // same relocation as the Express round trip above, same reason: this one writes
+      // `sparda_router.py`, `__pycache__/` and a `.syntax-check.py` into the shared tree
+      const cwd = path.join(__dirname, '.tmp', `inject-${fixtureName}`);
+      fs.rmSync(cwd, { recursive: true, force: true });
+      copyFixture(path.join(FIXTURES_DIR, fixtureName), cwd);
       const entryAbs = path.resolve(cwd, entryFile);
       const gi = path.join(cwd, '.gitignore');
       const giExisted = fs.existsSync(gi);
@@ -570,6 +588,8 @@ describe('SPARDA Test Suite', () => {
       // 7. Verify byte-by-byte comparison
       const restoredBytes = fs.readFileSync(entryAbs);
       expect(Buffer.compare(originalBytes, restoredBytes)).toBe(0);
+
+      fs.rmSync(cwd, { recursive: true, force: true });
     };
 
     it('should inject, remain idempotent, and remove FastAPI basic byte-for-byte', () => {

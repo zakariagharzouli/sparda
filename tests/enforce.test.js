@@ -28,10 +28,11 @@ import {
   revertEnforce,
   readEnforceManifest,
   ENFORCE_IDENT,
+  constrainingEnforcementProofs,
 } from '../src/commands/enforce.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE = path.join(here, 'fixtures', 'ubg-typelock-asserted');
+const FIXTURE = path.join(here, 'fixtures', 'ubg-fabric-enforce-proofs');
 
 let dir;
 beforeEach(() => {
@@ -75,7 +76,22 @@ describe('sparda enforce — synthesis under the court (ADR-076)', () => {
     );
     expect(shim?.meta?.verified).toBe(true);
     // disclosure: the manifest is live and names the enforced route
-    expect(readEnforceManifest(dir)?.routes).toEqual(['POST /posts/:id']);
+    const manifest = readEnforceManifest(dir);
+    expect(manifest?.routes).toEqual(['POST /posts/:id']);
+    expect(manifest?.guardProofs).toHaveLength(1);
+    expect(manifest?.guardProofs[0]).toMatchObject({
+      route: 'POST /posts/:id',
+      presence: { present: true, markerPresent: true, routeArgumentPresent: true },
+      constraining: { constraining: true },
+    });
+    expect(manifest?.guardProofs[0].constraining.trace.map((step) => step.step)).toEqual([
+      'mutation',
+      'guard',
+      'identity',
+      'scope',
+      'decision',
+      'denied-path',
+    ]);
   });
 
   it('is idempotent — a second --apply reports nothing to enforce and changes nothing', async () => {
@@ -103,6 +119,77 @@ describe('sparda enforce — synthesis under the court (ADR-076)', () => {
     expect(appSrc()).toBe(original);
     expect(fs.existsSync(path.join(dir, '.sparda', 'enforce.json'))).toBe(false);
     expect(stateOf(dir).state).toBe('PARTIAL');
+  });
+
+  it('a decorative guard is not constraining even when graph metadata claims verification', () => {
+    const presence = [
+      {
+        route: 'POST /posts/:id',
+        presence: { present: true, file: 'src/app.js' },
+      },
+    ];
+    const canonical = {
+      nodes: [
+        {
+          id: 'entrypoint:POST /posts/:id',
+          kind: 'entrypoint',
+          label: 'POST /posts/:id',
+        },
+        {
+          id: 'guard:shim',
+          kind: 'guard',
+          label: ENFORCE_IDENT,
+          meta: { verified: true, guardType: 'denies-unauthorized' },
+        },
+        { id: 'logic:handler', kind: 'logic', label: 'handler' },
+        {
+          id: 'effect:db_write:fake',
+          kind: 'effect',
+          label: 'write',
+          meta: { effectType: 'db_write' },
+        },
+        { id: 'state:posts', kind: 'state', label: 'posts', meta: {} },
+      ],
+      edges: [
+        {
+          kind: 'control_flow',
+          from: 'entrypoint:POST /posts/:id',
+          to: 'guard:shim',
+          meta: { route: 'entrypoint:POST /posts/:id', order: 0 },
+        },
+        {
+          kind: 'control_flow',
+          from: 'guard:shim',
+          to: 'logic:handler',
+          meta: { route: 'entrypoint:POST /posts/:id', order: 1 },
+        },
+        { kind: 'gate', from: 'guard:shim', to: 'logic:handler', meta: {} },
+        {
+          kind: 'control_flow',
+          from: 'logic:handler',
+          to: 'effect:db_write:fake',
+          meta: {},
+        },
+        { kind: 'mutation', from: 'effect:db_write:fake', to: 'state:posts', meta: {} },
+      ],
+    };
+    const decorative = new Map([
+      ['src/app.js', { out: `const ${ENFORCE_IDENT} = (_req, _res, next) => next();` }],
+    ]);
+
+    const [proof] = constrainingEnforcementProofs(
+      canonical,
+      decorative,
+      presence,
+      'req.user',
+    );
+    expect(proof.constraining.constraining).toBe(false);
+    expect(
+      proof.constraining.trace.find((step) => step.step === 'decision'),
+    ).toMatchObject({
+      result: 'unmeasured',
+      status: null,
+    });
   });
 
   it('rejects an injection-shaped --principal before touching anything', async () => {

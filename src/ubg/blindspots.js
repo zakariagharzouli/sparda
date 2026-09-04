@@ -18,6 +18,7 @@
 //
 // Risk is assigned from what the blind spot could be HIDING, not from its name.
 import { indexGraph, reachOf } from './apocalypse.js';
+import { affectedProperties } from './kernel/attach.js';
 import { cmp } from './schema.js';
 
 const RISK_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -143,6 +144,45 @@ export function surveyBlindspots(graph, report = {}) {
       label: reason,
       why: 'a surface the static walk could not bring into the graph — its behavior is entirely unseen',
     });
+  }
+
+  // 5 — a route that DEPENDS on something SPARDA could not read. Reachability,
+  // never a text search: the boundary is stamped on the body that made the stop,
+  // and a route owns it only if that body is on the route's own control-flow
+  // reach. A route with no path to it is untouched — that is the whole discipline
+  // here, because a rule that degrades every route is indistinguishable from no
+  // analysis at all.
+  //
+  // Grouped by (route, cause, package): a hundred stops inside one unreadable
+  // package are ONE thing to fix, and reporting them a hundred times would bury
+  // the routes that depend on a second package.
+  for (const ep of g.entrypoints) {
+    const grouped = new Map();
+    for (const id of reachOf(ep.id, g.cfOut)) {
+      for (const b of g.nodes.get(id)?.meta?.unknownBoundaries ?? []) {
+        // `affects` is empty for the causes that stay diagnostic. Only a cause
+        // with a declared proof obligation may gate a verdict (kernel/attach.js).
+        if (!affectedProperties(b.reason).length) continue;
+        const key = `${b.reason}|${b.pkg ?? ''}`;
+        if (!grouped.has(key)) grouped.set(key, b);
+      }
+    }
+    for (const [, b] of [...grouped].sort((a, z) => cmp(a[0], z[0])))
+      spots.push({
+        kind: 'unresolved-dependency',
+        // High, not critical: SPARDA knows exactly what it could not read and
+        // says which package. Critical is reserved for blindness it cannot name.
+        risk: 'high',
+        entrypoint: ep.id,
+        location: `${b.file}:${b.line}`,
+        label: b.pkg ?? b.symbol ?? b.reason,
+        // The CAUSE, as its own field. Grouping "why is this route blocked" must
+        // not require parsing `label`, and a snapshot that pins only the count
+        // cannot tell one root cause from another.
+        reason: b.reason,
+        affects: b.affects,
+        why: `this route delegates into ${b.pkg ?? b.symbol} , which the scan could not open — a mutation, a guard or an ownership check can be inside it`,
+      });
   }
 
   spots.sort(

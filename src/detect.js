@@ -6,6 +6,102 @@ import { spawnSync } from 'node:child_process';
 const err = (message, hint) => Object.assign(new Error(message), { code: 'USER', hint });
 
 export function detectStack(cwd) {
+  const detected = detectStackRaw(cwd);
+  const candidates = [...(detected.entryCandidates ?? []), detected.entryFile].filter(
+    Boolean,
+  );
+  return {
+    ...detected,
+    detection: detectedEvidence(cwd, detected, candidates),
+  };
+}
+
+// Detection is a claim about a program's boundary, so it travels with its evidence.  A
+// caller that wants an answer even on failure uses this instead of turning "I could not
+// identify the framework" into a hollow zero-route report.  `detectStack` itself still
+// throws: compiling an unknown program is forbidden, while this public diagnostic names the
+// unmeasured surface and its remediation.
+export function detectEvidence(cwd) {
+  try {
+    const stack = detectStack(cwd);
+    return {
+      status: 'DETECTED',
+      framework: stack.framework,
+      entry: stack.entryFile,
+      ...stack.detection,
+    };
+  } catch (error) {
+    if (error?.code !== 'USER') throw error;
+    const suggestions = suggestAppDirs(cwd);
+    return {
+      status: 'UNKNOWN FRAMEWORK',
+      framework: null,
+      entry: null,
+      evidence: [],
+      alternativeCandidates: suggestions.map((suggestion) => suggestion.dir),
+      contradictions: [],
+      coverage: {
+        framework: 'unmeasured',
+        entry: 'unmeasured',
+        entryCandidates: 0,
+        selected: null,
+        complete: false,
+      },
+      blindspots: [
+        {
+          kind: 'unknown-framework',
+          risk: 'high',
+          status: 'unmeasured',
+          reason: error.message,
+          remediation: error.hint ?? 'Run SPARDA from the application root.',
+        },
+      ],
+    };
+  }
+}
+
+function detectedEvidence(cwd, detected, candidates) {
+  const alternatives = [...new Set(candidates)].filter(
+    (candidate) => candidate !== detected.entryFile,
+  );
+  const pkgPath = path.join(cwd, 'package.json');
+  const packageEvidence = fs.existsSync(pkgPath)
+    ? [{ kind: 'package-manifest', file: 'package.json', value: detected.framework }]
+    : [];
+  const entryEvidence = {
+    kind: alternatives.length ? 'ambiguous-entry-selection' : 'entry-selection',
+    file: detected.entryFile,
+    value: alternatives.length
+      ? 'selected deterministically from competing candidates'
+      : 'selected entry',
+  };
+  return {
+    evidence: [...packageEvidence, entryEvidence],
+    alternativeCandidates: alternatives,
+    // A candidate is doubt, not a contradiction.  A contradiction must be witnessed by
+    // incompatible facts; Fabric 1/2 does not manufacture one from an ambiguity.
+    contradictions: [],
+    coverage: {
+      framework: 'measured',
+      entry: alternatives.length ? 'ambiguous' : 'measured',
+      entryCandidates: candidates.length,
+      selected: detected.entryFile,
+      complete: alternatives.length === 0,
+    },
+    blindspots: alternatives.length
+      ? [
+          {
+            kind: 'ambiguous-entry',
+            risk: 'high',
+            status: 'unmeasured',
+            reason: `${alternatives.length} competing entry candidate(s) were not selected`,
+          },
+        ]
+      : [],
+  };
+}
+
+function detectStackRaw(cwd) {
   const pkgPath = path.join(cwd, 'package.json');
   if (fs.existsSync(pkgPath)) {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
@@ -499,7 +595,12 @@ function searchPyFiles(dir, root, countRef = { val: 0 }, marker = 'FastAPI(') {
 
     if (stat.isDirectory()) {
       if (EXCLUDE.has(item)) continue;
-      const found = searchPyFiles(abs, root, countRef);
+      // `marker` MUST be forwarded. Without it the recursion falls back to the default
+      // 'FastAPI(' — so a Flask app whose `Flask(__name__)` lives in a subdirectory was either
+      // not found at all, or WORSE: in a tree containing both, `findFlaskEntry` returned the
+      // FastAPI file as the Flask entry and the real Flask routes were never analysed, silently
+      // (E-115). The bug is asymmetric by construction: only a NON-default marker can be lost.
+      const found = searchPyFiles(abs, root, countRef, marker);
       if (found) return found;
     } else if (stat.isFile() && item.endsWith('.py')) {
       countRef.val++;

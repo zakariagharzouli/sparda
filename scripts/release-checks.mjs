@@ -164,5 +164,107 @@ export function publishedCheck({ live, error, status }) {
     : { state: 'ok' };
 }
 
+// Normalizes a git URL into an owner/repo canonical form.
+export function normalizeGitRemote(url) {
+  if (!url) return 'UNKNOWN';
+  // Matches https://github.com/owner/repo.git or git@github.com:owner/repo.git or git+https://github.com/owner/repo.git
+  const match = url.match(/(?:github\.com[:/])([^/]+)\/([^.]+?)(?:\.git)?$/i);
+  return match ? `${match[1]}/${match[2]}`.toLowerCase() : 'UNKNOWN';
+}
+
+// Congruence checks ensure the repository running the workflow matches the provenance requested.
+export function congruenceCheck({ repositoryUrl, remoteOrigin }) {
+  const repoCanonical = normalizeGitRemote(repositoryUrl);
+  const originCanonical = normalizeGitRemote(remoteOrigin);
+
+  if (repoCanonical === 'UNKNOWN' || originCanonical === 'UNKNOWN') {
+    return [
+      fail(
+        'repository origin matches package.json repository',
+        `UNKNOWN format. package.json: '${repositoryUrl}', git remote: '${remoteOrigin}'`,
+      ),
+    ];
+  }
+
+  if (repoCanonical !== originCanonical) {
+    return [
+      fail(
+        'repository origin matches package.json repository',
+        `Mismatch: package.json says '${repoCanonical}', but git remote is '${originCanonical}'. Publishing from a private repo (like sparda-hq) when package says public (sparda) breaks npm provenance.`,
+      ),
+    ];
+  }
+
+  return [];
+}
+
+// OIDC Architecture Checks ensure Trusted Publishing is configured correctly in the workflow.
+export function workflowArchitectureChecks(yamlContent) {
+  const out = [];
+  if (!yamlContent) return out;
+
+  // NPM Trusted Publishing requires Node >= 22.14.0 and npm >= 11.5.1
+  if (!/node-version:\s*['"]?(?:22\.(?:1[4-9]|[2-9]\d)|2[3-9]\.)/.test(yamlContent)) {
+    out.push(
+      fail(
+        'workflow uses Node >= 22.14.0',
+        'Found unsupported or unspecified Node version for Trusted Publishing.',
+      ),
+    );
+  }
+  if (!/npm install -g npm@(?:11\.(?:[5-9]|[1-9]\d)|1[2-9]\.)/.test(yamlContent)) {
+    out.push(
+      fail(
+        'workflow explicitly pins npm >= 11.5.1',
+        'NPM version is not explicitly upgraded to the Trusted Publishing minimum.',
+      ),
+    );
+  }
+
+  // Check OIDC permissions
+  const hasIdToken = /id-token:\s*write/.test(yamlContent);
+  const hasContentsRead = /contents:\s*read/.test(yamlContent);
+  if (!hasIdToken || !hasContentsRead) {
+    out.push(
+      fail(
+        'workflow configures OIDC permissions',
+        'Missing `id-token: write` or `contents: read` in permissions block, required for Trusted Publishing.',
+      ),
+    );
+  }
+
+  // Cannot have NPM_TOKEN
+  if (/NPM_TOKEN|NODE_AUTH_TOKEN/.test(yamlContent)) {
+    out.push(
+      fail(
+        'workflow uses Trusted Publishing',
+        'Found NPM_TOKEN or NODE_AUTH_TOKEN in workflow. Trusted publishing must not use static tokens.',
+      ),
+    );
+  }
+
+  // Must NOT use --provenance with Trusted Publishing anymore, it's automatic in newer npm
+  if (/npm publish.*--provenance/.test(yamlContent)) {
+    out.push(
+      fail(
+        'workflow uses implicit provenance',
+        'Found --provenance flag. Trusted Publishing handles provenance automatically, remove the flag.',
+      ),
+    );
+  }
+
+  // Must only run on the public repo zakariagharzouli/sparda
+  if (!/github\.repository\s*==\s*['"]zakariagharzouli\/sparda['"]/.test(yamlContent)) {
+    out.push(
+      fail(
+        'workflow restricts execution to public repository',
+        "Missing `if: github.repository == 'zakariagharzouli/sparda'`.",
+      ),
+    );
+  }
+
+  return out;
+}
+
 const short = (sha) => String(sha ?? '').slice(0, 8);
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -25,6 +25,8 @@ import {
   publishedCheck,
   registryUrlFor,
   MANIFEST_FIELDS,
+  congruenceCheck,
+  workflowArchitectureChecks,
 } from '../scripts/release-checks.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -325,5 +327,96 @@ describe('the release artefacts it guards are actually in sync right now', () =>
   it('the CHANGELOG describes the current version', () => {
     const log = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
     expect(changelogChecks(log, pkg.version)).toEqual([]);
+  });
+});
+
+describe('OIDC Trusted Publishing and Congruence checks', () => {
+  it('refuses congruence if the remote origin does not match the package.json repository', () => {
+    // HQ simulation: it must refuse
+    const hq = congruenceCheck({
+      repositoryUrl: 'git+https://github.com/zakariagharzouli/sparda.git',
+      remoteOrigin: 'git@github.com:zakariagharzouli/sparda-hq.git',
+    });
+    expect(whats(hq)).toContain('repository origin matches package.json repository');
+
+    // Public simulation: it must pass
+    const pub = congruenceCheck({
+      repositoryUrl: 'git+https://github.com/zakariagharzouli/sparda.git',
+      remoteOrigin: 'https://github.com/zakariagharzouli/sparda.git',
+    });
+    expect(pub).toEqual([]);
+  });
+
+  it('refuses congruence if old zyx77550/sparda repository URL is used', () => {
+    const oldRepo = congruenceCheck({
+      repositoryUrl: 'git+https://github.com/zyx77550/sparda.git',
+      remoteOrigin: 'https://github.com/zakariagharzouli/sparda.git',
+    });
+    expect(whats(oldRepo)).toContain('repository origin matches package.json repository');
+  });
+
+  it('refuses congruence if the url format is unparseable', () => {
+    const unknown = congruenceCheck({
+      repositoryUrl: 'some-weird-url',
+      remoteOrigin: 'https://github.com/zakariagharzouli/sparda.git',
+    });
+    expect(whats(unknown)).toContain('repository origin matches package.json repository');
+    expect(unknown[0].detail).toMatch(/UNKNOWN format/);
+  });
+
+  it('validates OIDC Trusted Publishing workflow requirements', () => {
+    const validYaml = `
+      name: Release
+      jobs:
+        release:
+          if: github.repository == 'zakariagharzouli/sparda'
+          permissions:
+            contents: read
+            id-token: write
+          steps:
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 22.14.0
+            - run: npm install -g npm@11.5.1
+            - run: npm publish
+    `;
+    expect(workflowArchitectureChecks(validYaml)).toEqual([]);
+
+    const invalidYaml = `
+      name: Release
+      jobs:
+        release:
+          steps:
+            - run: npm publish --provenance
+              env:
+                NPM_TOKEN: \${{ secrets.NPM_TOKEN }}
+    `;
+    const failures = whats(workflowArchitectureChecks(invalidYaml));
+    expect(failures).toContain('workflow uses Node >= 22.14.0');
+    expect(failures).toContain('workflow configures OIDC permissions');
+    expect(failures).toContain('workflow restricts execution to public repository');
+    expect(failures).toContain('workflow uses Trusted Publishing');
+    expect(failures).toContain('workflow uses implicit provenance');
+    expect(failures).toContain('workflow explicitly pins npm >= 11.5.1');
+  });
+
+  it('adversarially rejects old zyx77550/sparda as workflow repository guard', () => {
+    const oldGuardYaml = `
+      name: Release
+      jobs:
+        release:
+          if: github.repository == 'zyx77550/sparda'
+          permissions:
+            contents: read
+            id-token: write
+          steps:
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 22.14.0
+            - run: npm install -g npm@11.5.1
+            - run: npm publish
+    `;
+    const failures = whats(workflowArchitectureChecks(oldGuardYaml));
+    expect(failures).toContain('workflow restricts execution to public repository');
   });
 });
