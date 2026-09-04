@@ -16,6 +16,9 @@ import path from 'node:path';
 import traverseModule from '@babel/traverse';
 import { parseModule, classInModule, methodInClassChain } from './extract.js';
 import { createResolver, diMapWithMod, walkAst } from './resolve.js';
+import { nestDirectProviderLinkages, provedProviderBindings } from './nest-provider.js';
+import { mergeStrictReceipts, nestStrictProviderChains } from './nest-strict-chain.js';
+import { staticPathsOf } from './nest-static-path.js';
 
 // A synthetic scan carrying ONLY the deny signal — attached to an auth-named guard step
 // when a global guard (APP_GUARD / useGlobalGuards) is PROVEN to deny app-wide. The route
@@ -74,22 +77,74 @@ const VERB_DECORATOR =
 // decorators (`@Query('id') id: string`) in ordinary REST controllers, and they buy one
 // extra file out of 6090 — a class that registers a GraphQL operation carries a
 // Resolver-suffixed brand, which is what the suffix already catches.
+const MODULE_RE = /@Module\b/;
 const CANDIDATE_RE =
   /@(?:[A-Za-z]*Controller|[A-Za-z]*Resolver|(?:Http)?(?:Get|Post|Put|Patch|Delete|Options|Head|All)(?:Mapping)?)\b/;
 
 // → { routes, globalMiddlewares, helpers, skipped, unknownHandlers, scannedFiles }
-export function extractNest(cwd, entryDir) {
+export function extractNest(cwd, entryDir, { kernel = null } = {}) {
   const routes = [];
   const helpers = [];
   const skipped = [];
+  const moduleFiles = [];
   // The registration invariant (ADR-079), ported from Express: a route SPARDA sees
   // but cannot bind is DECLARED, never dropped or — worse — guessed.
   const unknownHandlers = [];
   const scannedFiles = [];
   // the interprocedural engine (ADR-054): follows this.<prop>.<m>() through the
   // constructor-type DI graph — bounded, cycle-guarded, memoized per compile.
-  const engine = createResolver({ cwd, scannedFiles, helpers });
+  // The ledger is passed for the same reason it is passed on the Express path: a
+  // resolution stop that records nothing is the loss shape hard rule 9 forbids. It
+  // was absent here, and DI is where the walk is DEEPEST — cal.com compiled with
+  // zero UnknownBoundary facts in the whole application, so every stop between a
+  // controller and its service was silent.
+  // ADR-105 — the module-literal BINDING proof, supplied lazily.
+  //
+  // Supplied as a THUNK so the module grammar is walked at most once per compile,
+  // and only when a controller actually dispatches through DI — on an application
+  // with no such hop it is never built at all. The classifying pass below fills
+  // `moduleFiles` COMPLETELY before any controller is scanned, so the map this
+  // returns does not depend on directory-walk order.
+  let bindingsMemo = null;
+  const engine = createResolver({
+    cwd,
+    scannedFiles,
+    helpers,
+    kernel,
+    provedBindings: () => (bindingsMemo ??= provedProviderBindings({ moduleFiles })),
+  });
   const root = path.resolve(cwd, entryDir || '.');
+
+  // ONE classifying pass, then the real work. Each file's head is read exactly
+  // once, as before — what changes is that the module set is COMPLETE before the
+  // first controller is scanned. ADR-105's binding proof is asked during that
+  // scan, and a proof computed from a half-filled module list would depend on the
+  // order the directory walk happened to return files in: two runs over the same
+  // bytes, two answers, which is the one property a deterministic UBG may not
+  // lose.
+  //
+  // Fast reject: only files that mention `@Controller` can define a route. A big
+  // Nest monorepo (twenty) is mostly DTOs/entities/services — skipping their full
+  // babel parse here is the difference between ~20s and a few seconds. Services
+  // reached through DI are still parsed on demand by resolveMethod.
+  const candidates = [];
+  for (const file of walk(root)) {
+    let head;
+    try {
+      head = fs.readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    // A `@Module` is not a route source, so the controller pre-filter skips it —
+    // but it is the literal the provider grammar rests on.
+    if (MODULE_RE.test(head)) moduleFiles.push(file);
+    // A route lives on a REST controller (any brand) OR a @Resolver (GraphQL) —
+    // both wire their methods and DI identically, so the same machinery serves
+    // both. The pre-filter still skips the DTO/entity/service bulk that carries no
+    // route decorator.
+    if (CANDIDATE_RE.test(head)) candidates.push(file);
+  }
+
   // App-wide auth (immich, nocodb, most real Nest apps): a global guard registered via
   // `{ provide: APP_GUARD, useClass: AuthGuard }` or `useGlobalGuards(...)`. It gates every
   // route but is invisible to a per-method decorator scan, so its guards read asserted, not
@@ -168,21 +223,7 @@ export function extractNest(cwd, entryDir) {
     return out;
   }
 
-  for (const file of walk(root)) {
-    // Fast reject: only files that mention `@Controller` can define a route. A big
-    // Nest monorepo (twenty) is mostly DTOs/entities/services — skipping their full
-    // babel parse here is the difference between ~20s and a few seconds. Services
-    // reached through DI are still parsed on demand by resolveMethod.
-    let head;
-    try {
-      head = fs.readFileSync(file, 'utf8');
-    } catch {
-      continue;
-    }
-    // A route lives on a REST controller (any brand) OR a @Resolver (GraphQL) — both
-    // wire their methods and DI identically, so the same machinery serves both. The
-    // pre-filter still skips the DTO/entity/service bulk that carries no route decorator.
-    if (!CANDIDATE_RE.test(head)) continue;
+  for (const file of candidates) {
     const mod = parseModule(file);
     const rel = relOf(cwd, file);
     if (mod.error) {
@@ -201,7 +242,7 @@ export function extractNest(cwd, entryDir) {
         // class decorator we don't recognize but whose methods still speak HTTP.
         const ctrlPrefix = controllerPrefixOf(cls); // string prefix, or null
         const hasVerbMethod = cls.body.body.some(
-          (m) => m.type === 'ClassMethod' && httpDecorator(m.decorators),
+          (m) => m.type === 'ClassMethod' && httpDecorator(m.decorators, mod),
         );
         if (resolver === undefined && ctrlPrefix === null && !hasVerbMethod) return;
         sawController = true;
@@ -213,7 +254,8 @@ export function extractNest(cwd, entryDir) {
 
         for (const m of cls.body.body) {
           if (m.type !== 'ClassMethod' || !m.key || m.key.type !== 'Identifier') continue;
-          const http = httpDecorator(m.decorators) ?? graphqlOp(m.decorators, m.key.name);
+          const http =
+            httpDecorator(m.decorators, mod) ?? graphqlOp(m.decorators, m.key.name);
           if (!http) continue;
           const fullPath = joinPath(prefix, http.path);
           const guards = expandComposites(
@@ -344,8 +386,25 @@ export function extractNest(cwd, entryDir) {
   applyAuthPosture(routes);
 
   routes.sort((a, b) => cmp(a.path, b.path) || cmp(a.method, b.method));
+  // Nest static direct provider V1 (ADR-102). Runs AFTER the routes exist and is
+  // handed the lowering's own route list, so it can only ever add evidence ABOUT
+  // the route table — never a route TO it.
+  // The strict chain (ADR-106) runs beside it over the SAME module set and the
+  // SAME route list, and its receipts are merged INTO the same fact list — one
+  // fact kind, no second graph. A legacy linkage keeps `strict: null`, which is
+  // the admission inside the value rather than beside it (rule 13).
+  const providerLinkages = mergeStrictReceipts(
+    nestDirectProviderLinkages({
+      cwd,
+      moduleFiles,
+      routes,
+      ledger: kernel,
+    }),
+    nestStrictProviderChains({ cwd, moduleFiles, routes, ledger: kernel }),
+  );
   return {
     routes,
+    providerLinkages,
     globalMiddlewares: [],
     helpers,
     skipped,
@@ -394,7 +453,7 @@ function applyAuthPosture(routes) {
 const AUTH_OPTOUT_TRUE =
   /^(skipAuth|authless|noAuth|public|allowUnauthenticated|unauthenticated)$/i;
 
-function httpDecorator(decorators) {
+function httpDecorator(decorators, mod = null) {
   for (const d of decorators ?? []) {
     const call = d.expression;
     const name = call.type === 'CallExpression' ? idName(call.callee) : idName(call);
@@ -423,16 +482,27 @@ function httpDecorator(decorators) {
     // endpoint in silence, which the registration invariant forbids (ADR-079).
     const elements =
       pathArg?.type === 'ArrayExpression' ? pathArg.elements.filter(Boolean) : null;
-    const literals = (elements ?? (pathArg ? [pathArg] : [])).filter(
-      (e) => e.type === 'StringLiteral',
-    );
+    // The V1 static grammar (`nest-static-path.js`) reads the forms a literal test
+    // cannot: a template literal, a program-scope `const`, a named import of an
+    // exported one. It is tried FIRST and only replaces the literal read when it
+    // resolves the WHOLE argument — a partial answer would drop a URL the app
+    // serves. `null` means "not forced by the grammar", and everything below then
+    // behaves exactly as it did before, declared boundary included.
+    const statik = mod && pathArg ? staticPathsOf(pathArg, mod) : null;
+    const literals = statik
+      ? statik.map((value) => ({ type: 'StringLiteral', value }))
+      : (elements ?? (pathArg ? [pathArg] : [])).filter(
+          (e) => e.type === 'StringLiteral',
+        );
     // a path argument that exists but is not a literal is a path we cannot read —
     // distinct from no argument at all, which legitimately means "the prefix". In an
     // array, an unreadable ELEMENT is its own lost route, so the doubt survives even
     // when its siblings read cleanly.
-    const unreadable = (elements ?? (pathArg ? [pathArg] : [])).filter(
-      (e) => e.type !== 'StringLiteral',
-    );
+    const unreadable = statik
+      ? []
+      : (elements ?? (pathArg ? [pathArg] : [])).filter(
+          (e) => e.type !== 'StringLiteral',
+        );
     return {
       method: m[1].toLowerCase(),
       path: literals[0]?.value ?? '',

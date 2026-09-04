@@ -53,6 +53,21 @@ export const VERIFIABLE = new Set([...PROBEABLE, ...CONVENTION_ROUTED]);
 // directory tree, so withholding it would be withholding a free honesty check.
 export const FREE_ORACLE = CONVENTION_ROUTED;
 
+// Fabric F3. JavaScript has no nominal interfaces, so the trait is a closed
+// capability instead: a verdict-emitting organ receives its premise only
+// through this object. The capability owns the call to premiseFor; consumers
+// cannot accidentally reimplement its default, oracle policy, or basis.
+export function certifiableOrgan(name) {
+  if (!/^[a-z][a-z0-9-]*$/.test(name ?? ''))
+    throw new Error('CertifiableOrgan requires a stable lowercase name');
+  return Object.freeze({
+    name,
+    premise(graph, report, options) {
+      return premiseFor(graph, report, options);
+    },
+  });
+}
+
 // The graph's entrypoints, in the minimal shape `reconcile` compares on.
 export function entrypointsAsRoutes(graph) {
   const nodes = graph.nodes.values ? [...graph.nodes.values()] : graph.nodes;

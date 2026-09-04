@@ -31,7 +31,7 @@ describe('prove --markdown — the PR sticky-comment body', () => {
     const md = await markdownOf('ubg-medusa');
     expect(md).toContain('SPARDA');
     expect(md).toMatch(/!\[SPARDA\]\(https:\/\/img\.shields\.io\/badge\/SPARDA-/);
-    expect(md).toContain('github.com/zakariagharzouli/sparda');
+    expect(md).toContain('github.com/zyx77550/sparda');
   });
 
   it('a route with an unguarded mutation surfaces in the findings table', async () => {

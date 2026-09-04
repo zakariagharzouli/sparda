@@ -122,9 +122,13 @@ describe('every verdict-emitting consumer asks for the premise', () => {
     // name the PROPERTY (turns a graph into a claim), so GRADERS below is the list to extend.
     .filter((f) => GRADERS.some(({ from, fns }) => callsGrader(f.src, from, fns)));
 
-  it('nothing anywhere grades a compiled graph without premiseFor()', () => {
+  it('nothing anywhere grades a compiled graph without the CertifiableOrgan trait', () => {
     const offenders = graders
-      .filter((f) => !EXEMPT.has(f.rel) && !/premiseFor\(/.test(f.src))
+      .filter(
+        (f) =>
+          !EXEMPT.has(f.rel) &&
+          (!/certifiableOrgan\(/.test(f.src) || !/\.premise\(/.test(f.src)),
+      )
       .map((f) => f.rel);
     expect(offenders).toEqual([]);
   });
@@ -146,6 +150,7 @@ describe('every verdict-emitting consumer asks for the premise', () => {
     expect(graders.map((f) => f.rel).sort()).toEqual([
       'bench/repro.mjs',
       'bench/scale-run.mjs',
+      'bench/soundness/run.mjs',
       'scripts/corpus-oracle.mjs',
       'src/commands/apocalypse.js',
       'src/commands/badge.js',

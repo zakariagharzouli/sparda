@@ -1,0 +1,6 @@
+{
+  "name": "tapp-origins",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "dependencies": { "express": "4.18.2", "knex": "3.1.0", "@prisma/client": "5.0.0" }
+}

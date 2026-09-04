@@ -1,0 +1,40 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "nodegoat-allocations-idor",
+  "classification": "vulnerable",
+  "measurement": "scored",
+  "type": "insecure-direct-object-reference",
+  "route": {
+    "method": "GET",
+    "path": "/allocations/:userId"
+  },
+  "scope": {
+    "status": "targeted-gap",
+    "reason": "The full chain is now linked: Express registration, CommonJS constructor handler, positional-callback continuation, captured Mongo collection, AND the request-to-filter dataflow — GET /allocations/:userId reads `allocations` with filterOrigins [params.userId, query.threshold]. What remains is the severity class of the matching rule and a false-positive ownership signal."
+  },
+  "origin": {
+    "repository": "OWASP/NodeGoat",
+    "url": "https://github.com/OWASP/NodeGoat",
+    "corpus": "nodegoat",
+    "appDir": ".",
+    "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+    "source": [
+      {
+        "path": "app/routes/index.js",
+        "sha256": "149ebc1e7e78e40ae3da739f44ae9d5c84d672826a652d822ec6ba33aae96d96",
+        "fingerprint": "3ab970b2888bc1501515db24a83cc7851ac9c09d00948c652300401515185eb5"
+      },
+      {
+        "path": "app/routes/allocations.js",
+        "sha256": "37ed1aa4c86c93822a25d48f62e79e73d0129c55e33c5c4d574f149b7eb59c65",
+        "fingerprint": "b5b7da1a6b595799cf6cca402756dd9a3f6e2a8b5d712c1989d23b7f01f349a6"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "The upstream source labels the session-user alternative as the fix for insecure DOR; the live code instead trusts the URL parameter.",
+    "why": "displayAllocations reads req.params.userId and queries allocations for it, even though the caller is only checked as logged in."
+  },
+  "missCause": "One cause, precisely located. The G1 half was fixed: a client-supplied value no longer builds an ownership assertion (`callAssertsOwnership`). Its TWIN remains — `whereOwnerScoped` reads the filter `{userId: <identifier>}` as an owner scope without asking where the value came from, so the route still carries `ownerScoped` and the advisory stays suppressed. Even unsuppressed, OBJECT_SCOPE_UNPROVEN is advisory: true by design (ADR-058) and can never be a hard finding. Route recognition, handler linkage, async linkage, the DB effect and the request-to-filter dataflow are ALL modelled. The route stays UNKNOWN."
+}

@@ -30,7 +30,7 @@ import { compileUBG } from '../ubg/compile.js';
 import { canonicalizeGraph } from '../ubg/schema.js';
 import { checkGraph, diffGraphs, verdictOf, verdictState } from '../ubg/apocalypse.js';
 import { surveyBlindspots } from '../ubg/blindspots.js';
-import { premiseFor, withPremiseGaps, basisFrom } from '../ubg/premise.js';
+import { certifiableOrgan, withPremiseGaps, basisFrom } from '../ubg/premise.js';
 import { witnessTargets, admitWitnesses } from '../ubg/witness.js';
 
 const EVENT_POLL_MS = Number(process.env.SPARDA_EVENT_POLL_MS ?? 5000);
@@ -359,7 +359,7 @@ export async function startStdioBridge({ cwd, portOverride }) {
       {
         name: 'sparda_info',
         description:
-          'Info about this SPARDA endpoint. SPARDA is the trust layer for AI-written code — AI writes, SPARDA proves: deterministic, offline behavior proofs (guards, invariants, irreversible effects) plus a live gate for AI edits, no API key. By Residual Labs (residual-labs.fr) — github.com/zakariagharzouli/sparda',
+          'Info about this SPARDA endpoint. SPARDA is the trust layer for AI-written code — AI writes, SPARDA proves: deterministic, offline behavior proofs (guards, invariants, irreversible effects) plus a live gate for AI edits, no API key. By Residual Labs (residual-labs.fr) — github.com/zyx77550/sparda',
         inputSchema: { type: 'object', properties: {} },
       },
       {
@@ -477,7 +477,7 @@ export async function startStdioBridge({ cwd, portOverride }) {
             circuits_observed: Object.keys(manifest.labs?.circuits ?? {}).length,
             composite_tools: composites.size,
             generated_by:
-              'SPARDA by Residual Labs (residual-labs.fr) — npx sparda-mcp init — github.com/zakariagharzouli/sparda',
+              'SPARDA by Residual Labs (residual-labs.fr) — npx sparda-mcp init — github.com/zyx77550/sparda',
           },
           null,
           2,
@@ -1258,7 +1258,7 @@ export async function proveApp(cwd, { route } = {}) {
   // Same shared call as the CLI and the badge, same opt-in boundary: only the boot-free
   // convention oracle runs here (the runtime one executes the target's code, which an MCP
   // tool call must never do as a side effect).
-  const premise = await premiseFor(canonical, report, { cwd });
+  const premise = await certifiableOrgan('mcp-prove').premise(canonical, report, { cwd });
   const blind = surveyBlindspots(canonical, withPremiseGaps(report, premise));
   // The verdict word always reflects the WHOLE app (a route filter narrows the finding list,
   // never the safety claim — an AI must never read "PROVEN" because it hid the rest).

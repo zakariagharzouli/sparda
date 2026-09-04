@@ -72,4 +72,26 @@ describe('prove — the whole trust verdict in one gesture', () => {
     expect(j.seal).toMatch(/^seal_/);
     expect(Array.isArray(j.findings)).toBe(true);
   });
+
+  it('keeps a positive PDE diagnosis out of the public verdict', async () => {
+    // The OpenAPI document is its own declared premise. Its route surface is
+    // fully modelled, so the PDE may legitimately diagnose every local claim
+    // as proven. The app still has no state-changing behavior, however, and
+    // verdictOf() must keep the public word at SURFACE. This is the one-way
+    // authority boundary: PDE may explain a withheld verdict, never upgrade it.
+    const { out } = await capture(() =>
+      runProve({
+        cwd: fix('ubg-openapi'),
+        openapi: 'openapi.json',
+        json: true,
+      }),
+    );
+    const j = JSON.parse(out);
+    expect(j.verdict).toBe('SURFACE');
+    expect(j.pde).toMatchObject({
+      diagnosticOnly: true,
+      authority: 'none',
+      status: 'proven',
+    });
+  });
 });

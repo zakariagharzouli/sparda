@@ -1,0 +1,4 @@
+{
+  "name": "ubg-fabric-conservation",
+  "dependencies": { "express": "5.0.0" }
+}

@@ -1,0 +1,4 @@
+{
+  "name": "ubg-fabric-coverage",
+  "dependencies": { "express": "5.0.0" }
+}

@@ -9,19 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.71.5]
-
-### Changed
-
-- **Brand Kit v1.0 visual identity integration**
-  Integrated the official high-definition 1600x480 dark README banner with SPARDA Violet and Proof Lime palette, updated the VS Code extension icon to 512x512, and cleaned up legacy raster assets.
-
-## [0.71.4]
+## [0.72.1] - 2026-09-04
 
 ### Fixed
 
-- **Repository and metadata URLs updated to official GitHub location**
-  Corrected all repository, issues, and documentation URLs across npm and MCP registry manifests to point to `github.com/zakariagharzouli/sparda`.
+- **Reconstruction de la chaîne de release et passage à NPM OIDC Trusted Publishing** (ADR-108, E-114).
+  La version `v0.72.0` a été tagguée au commit `67dcf3d` sur le Core privé mais sa publication automatique a échoué en raison du rejet de la provenance OIDC npm sur un dépôt privé sans permissions `id-token: write`.
+  Cette version 0.72.1 :
+  - Déploie une valve de synchronisation transactionnelle en staging temporaire avec secret-gate et contrôle des imports orphelins sur l'arbre public final (`tools/publish/execute-sync.mjs`).
+  - Aligne les gardes et URLs de dépôt public sur `zakariagharzouli/sparda`.
+  - Configure le workflow de release GitHub Actions avec les permissions OIDC (`contents: read`, `id-token: write`), Node >= 22.14.0, npm >= 11.5.1 et `npm publish` sans token statique.
+  - Préserve strictement l'immuabilité de l'identité du Marketplace VS Code (`zyx77550`).
+
+> `v0.72.0` a été tagguée sur le Core privé mais n'a pas été publiée sur npm ni sur VS Code Marketplace suite à l'échec de la release initiale. Son contenu fonctionnel (reçu strict ProviderLinkage et bridge TypeORM) est repris et publié sous la version 0.72.1.
+
+## [0.72.0]
+
+Cette version ajoute le reçu strict ProviderLinkage et le bridge TypeORM exact. Il n'y a pas de changement de verdict et le gain corpus actuel est de zéro chaîne stricte.
 
 ## [0.71.3]
 
@@ -173,7 +177,7 @@ what SPARDA is willing to claim without measuring did.
 ### Fixed
 
 - **The VS Code extension shipped a stub to the Marketplace.** `extensions/vscode/` was
-  published as `zakariagharzouli.sparda@0.70.0` carrying one command whose entire body was
+  published as `zyx77550.sparda@0.70.0` carrying one command whose entire body was
   `showInformationMessage('Audit command triggered! (Integration pending)')`. An outside
   reviewer read the manifest, read the source, and correctly called it a placeholder. A
   working extension already existed in `integrations/vscode/` — 135 tested lines, four

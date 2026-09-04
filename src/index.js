@@ -334,7 +334,7 @@ By Residual Labs — residual-labs.fr`);
   if (opts.verbose && err?.stack) console.error(err.stack);
   else
     console.error(
-      '  (run with --verbose for details — or open an issue: github.com/zakariagharzouli/sparda/issues)',
+      '  (run with --verbose for details — or open an issue: github.com/zyx77550/sparda/issues)',
     );
   process.exit(err?.code === 'USER' ? 1 : 2);
 }

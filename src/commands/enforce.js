@@ -30,12 +30,14 @@ import path from 'node:path';
 import { parse } from '@babel/parser';
 import { compileUBG } from '../ubg/compile.js';
 import { premiseFor } from '../ubg/premise.js';
+import { surveyBlindspots } from '../ubg/blindspots.js';
 import { canonicalizeGraph } from '../ubg/schema.js';
 import {
   checkGraph,
   verdictOf,
   verdictState,
   assertedOnlyMutationRoutes,
+  buildProofObjects,
 } from '../ubg/apocalypse.js';
 
 export const ENFORCE_IDENT = 'spardaProvenAuth';
@@ -142,6 +144,154 @@ function applyEdits(src, plan, principal, shimBody) {
   return out;
 }
 
+const escapeRe = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function routeCallWithEnforcedGuard(ast, label) {
+  const [method, routePath] = label.split(' ', 2);
+  let hit = null;
+  const walk = (node) => {
+    if (!node || typeof node !== 'object' || hit) return;
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child);
+      return;
+    }
+    const callee = node.type === 'CallExpression' ? node.callee : null;
+    const first = node.arguments?.[0];
+    const hasShim = node.arguments?.some(
+      (arg) => arg?.type === 'Identifier' && arg.name === ENFORCE_IDENT,
+    );
+    if (
+      callee?.type === 'MemberExpression' &&
+      callee.property?.type === 'Identifier' &&
+      callee.property.name.toUpperCase() === method &&
+      first?.type === 'StringLiteral' &&
+      first.value === routePath &&
+      hasShim
+    ) {
+      hit = node;
+      return;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key === 'range') continue;
+      const child = node[key];
+      if (child && typeof child === 'object') walk(child);
+    }
+  };
+  walk(ast.program);
+  return hit;
+}
+
+// Proof (a): the check is PRESENT in the exact route registration enforcement targeted. This is
+// a byte/AST proof, not an inference from the generated function's friendly name.
+function presentProofs(plans, targets) {
+  return targets.map((target) => {
+    const plan = plans.get(target.loc.file);
+    const source = plan?.out ?? '';
+    let routeCall = null;
+    try {
+      routeCall = routeCallWithEnforcedGuard(
+        parse(source, {
+          sourceType: 'unambiguous',
+          plugins: ['typescript', 'jsx', 'decorators-legacy'],
+        }),
+        target.label,
+      );
+    } catch {
+      // `present: false` below is the honest result; the court rolls all edits back.
+    }
+    const markerPresent = source.includes(MARK_START) && source.includes(MARK_END);
+    const declarationPresent = new RegExp(`const\\s+${ENFORCE_IDENT}\\s*=\\s*\\(`).test(
+      source,
+    );
+    const present = Boolean(markerPresent && declarationPresent && routeCall);
+    return {
+      route: target.label,
+      presence: {
+        present,
+        file: target.loc.file,
+        sourceSha256: sha(source),
+        markerPresent,
+        declarationPresent,
+        routeArgumentPresent: Boolean(routeCall),
+      },
+    };
+  });
+}
+
+function deniedPathWitness(source, principal) {
+  // Both the absent-principal predicate and its immediate deny return must appear in one branch.
+  // A later 401 in an unrelated helper cannot make a decorative shim constraining.
+  const re = new RegExp(
+    `if\\s*\\(\\s*!\\s*${escapeRe(principal)}\\s*\\)\\s*return\\s+res\\.status\\(\\s*(401|403)\\s*\\)`,
+  );
+  const match = source.match(re);
+  return match
+    ? { predicate: `!${principal}`, status: Number(match[1]), source: match[0] }
+    : null;
+}
+
+// Proof (b): presence is not protection. The recompiled graph must see THIS generated guard as
+// verified, on the target route's discharged mutation path, and the bytes must contain the
+// principal-absence branch that returns 401/403. The trace is mutation -> guard -> identity ->
+// scope -> decision -> denied path.
+export function constrainingEnforcementProofs(canonical, plans, presence, principal) {
+  const nodes = new Map(canonical.nodes.map((node) => [node.id, node]));
+  const discharges = new Map(
+    buildProofObjects(canonical).map((proof) => [proof.entrypoint, proof]),
+  );
+  return presence.map((proof) => {
+    const entrypoint = `entrypoint:${proof.route}`;
+    const discharge = discharges.get(entrypoint);
+    const guardRef = discharge?.discharged_by.guards.find(
+      (guard) => guard.guard === ENFORCE_IDENT,
+    );
+    const guard = guardRef ? nodes.get(guardRef.node) : null;
+    const source = plans.get(proof.presence.file)?.out ?? '';
+    const deniedPath = deniedPathWitness(source, principal);
+    const mutations = discharge?.discharged_by.mutations ?? [];
+    const scoped = Boolean(
+      guardRef &&
+      discharge?.discharged_by.deny_path.includes(guardRef.node) &&
+      mutations.length > 0,
+    );
+    const constraining = Boolean(
+      proof.presence.present &&
+      guard?.meta?.verified === true &&
+      guard?.meta?.guardType === 'denies-unauthorized' &&
+      scoped &&
+      deniedPath,
+    );
+    return {
+      ...proof,
+      constraining: {
+        constraining,
+        trace: [
+          { step: 'mutation', nodes: mutations },
+          {
+            step: 'guard',
+            node: guard?.id ?? null,
+            label: ENFORCE_IDENT,
+            verified: guard?.meta?.verified === true,
+          },
+          { step: 'identity', expression: principal, predicate: `!${principal}` },
+          {
+            step: 'scope',
+            route: proof.route,
+            routeGuardPath: discharge?.discharged_by.deny_path ?? [],
+            dominatesMutation: scoped,
+          },
+          {
+            step: 'decision',
+            status: deniedPath?.status ?? null,
+            result: deniedPath ? 'deny' : 'unmeasured',
+          },
+          { step: 'denied-path', source: deniedPath?.source ?? null },
+        ],
+      },
+    };
+  });
+}
+
 // The DELTA verdict: same app, before and after the synthesized check. Deliberately
 // premise-blind — the premise is identical on both sides, so it cannot discriminate, and
 // enforce V1 is Express-only where no boot-free oracle exists. Gating the rollback decision
@@ -156,6 +306,27 @@ function compileVerdict(cwd) {
   const { findings } = checkGraph(canonical);
   const verdict = verdictOf(findings, canonical, {});
   return { canonical, report, findings, verdict, state: verdictState(verdict) };
+}
+
+// The routes whose DB-effect proof depends on something the scan could not read.
+//
+// A synthesized guard proves a route safe by showing every mutation sits behind
+// it. That argument is only as good as the mutation set — and a route delegating
+// into a workspace package SPARDA could not open has a mutation set it does not
+// know. Enforce may not stamp PROVEN over that: the check would be real and the
+// proof would be about a program nobody read.
+//
+// Route-scoped by construction (`surveyBlindspots` walks each entrypoint's own
+// control-flow reach), so an unaffected route on the same app is untouched.
+export function routesBlockedByUnknownDependency(canonical, report) {
+  return surveyBlindspots(canonical, report)
+    .spots.filter(
+      (s) =>
+        s.kind === 'unresolved-dependency' &&
+        (s.affects ?? []).includes('db-effect') &&
+        s.entrypoint,
+    )
+    .map((s) => ({ entrypoint: s.entrypoint, dependency: s.label }));
 }
 
 // The word this command is allowed to print, once the edit has proven itself.
@@ -182,6 +353,17 @@ export function readEnforceManifest(cwd) {
       const cur = fs.readFileSync(path.join(cwd, rel), 'utf8');
       if (sha(cur) !== rec.enforcedSha256 || !cur.includes(MARK_START)) return null;
     }
+    // V2 manifests carry two explicit guard proofs. A stale/incomplete artefact must not
+    // disclose an enforced tier. This remains disclosure only: the public verdict comes from
+    // recompiling the graph and never trusts this JSON.
+    if (
+      m.version >= 2 &&
+      (!Array.isArray(m.guardProofs) ||
+        !m.guardProofs.every(
+          (proof) => proof.presence?.present && proof.constraining?.constraining,
+        ))
+    )
+      return null;
     return m;
   } catch {
     return null;
@@ -263,13 +445,32 @@ export async function runEnforce(opts) {
   // write, then THE COURT: recompile — the edit persists only if it proves itself
   for (const [rel, p] of plans) fs.writeFileSync(path.join(cwd, rel), p.out);
   const after = compileVerdict(cwd);
+  const presence = presentProofs(plans, targets);
+  const guardProofs = constrainingEnforcementProofs(
+    after.canonical,
+    plans,
+    presence,
+    principal,
+  );
   const stillAsserted = assertedOnlyMutationRoutes(after.canonical).length;
   const grewFindings = after.findings.length > before.findings.length;
-  if (after.state !== 'PROVEN' || stillAsserted > 0 || grewFindings) {
+  const proofFailed = guardProofs.some(
+    (proof) => !proof.presence.present || !proof.constraining.constraining,
+  );
+  // PROVEN is forbidden for a route whose effect set rests on an unreadable
+  // workspace package — the one thing this sprint exists to make impossible.
+  const blockedRoutes = routesBlockedByUnknownDependency(after.canonical, after.report);
+  if (
+    after.state !== 'PROVEN' ||
+    stillAsserted > 0 ||
+    grewFindings ||
+    proofFailed ||
+    blockedRoutes.length > 0
+  ) {
     for (const [rel, p] of plans) fs.writeFileSync(path.join(cwd, rel), p.src); // roll back, byte-for-byte
     throw Object.assign(
       new Error(
-        `enforcement did not prove itself (verdict ${after.state}, asserted-only left ${stillAsserted}${grewFindings ? ', new findings appeared' : ''}) — every edit rolled back`,
+        `enforcement did not prove itself (verdict ${after.state}, asserted-only left ${stillAsserted}${grewFindings ? ', new findings appeared' : ''}${blockedRoutes.length ? `, ${blockedRoutes.length} route(s) depend on an unreadable dependency: ${blockedRoutes.map((r) => `${r.entrypoint} → ${r.dependency}`).join(', ')}` : ''}) — every edit rolled back`,
       ),
       {
         code: 'USER',
@@ -280,7 +481,7 @@ export async function runEnforce(opts) {
 
   // record the manifest — the auditable provenance of the ENFORCED tier
   const manifest = {
-    version: 1,
+    version: 2,
     at: new Date().toISOString(),
     principal,
     routes: targets.map((t) => t.label),
@@ -290,6 +491,7 @@ export async function runEnforce(opts) {
         { originalSha256: sha(p.src), enforcedSha256: sha(p.out) },
       ]),
     ),
+    guardProofs,
   };
   fs.mkdirSync(path.join(cwd, '.sparda'), { recursive: true });
   fs.writeFileSync(
@@ -304,6 +506,7 @@ export async function runEnforce(opts) {
         {
           enforced: manifest.routes,
           files: Object.keys(manifest.files),
+          proofs: manifest.guardProofs,
           verdict: announced,
         },
         null,
@@ -312,6 +515,7 @@ export async function runEnforce(opts) {
     );
   else {
     for (const t of targets) log(`  ✓ enforced ${t.label}`);
+    log(`  ✓ presence and constraint proofs recorded for ${targets.length} route(s)`);
     log(
       `\n✓ ${announced} — ${targets.length} route(s) now carry a boundary check SPARDA verified on the recompiled graph.` +
         (announced.startsWith('PARTIAL')

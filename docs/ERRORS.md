@@ -1946,7 +1946,7 @@ byRisk.high` from the same `surveyBlindspots` it already computes — single sou
   WHOLE corpus, not the apps that happen to be on disk — and when an app cannot be measured
   at all, say which one and why, in the release record rather than in scrollback.
 
-## E-099 (OPEN) — a deep blind spot names the route's FILE with another file's LINE
+## E-099 (CLOSED) — a deep blind spot names the route's FILE with another file's LINE
 
 - **Symptom:** twenty reports 139 high blind spots. Every one of them that resolved through
   a DI hop points at a line that has nothing to do with it. Worked example: the blind spot
@@ -1963,9 +1963,28 @@ byRisk.high` from the same `surveyBlindspots` it already computes — single sou
   point at the code is not usable, so the honest answer degrades to an unusable one, which
   is how an honest tool gets ignored. It also made twenty's "139 high blind spots" read as
   a research problem rather than a reporting one.
-- **Not fixed here** — recorded with the reproduction rather than half-fixed. The fix is to
-  carry the DECLARING file alongside the line through the resolver's merge, the same way
-  `helpers` already records `sourceFile` + `sourceLine`.
+- **Fix (ADR-100).** The declaring file is stamped onto each effect at the scan boundary in
+  `resolve.js` (`stampDeclaringFile`), where the module is still known, and `translate.js`
+  locates the node with `eff.file ?? owner.loc.file`. `??=` on the stamp means the DEEPEST
+  scan wins, which is also what makes it safe on the memoized bundles whose effect objects
+  are shared by reference across every parent that reaches them: the file is a property of
+  the effect, not of the path taken to it.
+  - Reproduced on the existing `ubg-nestjs-deep` fixture before the change:
+    `src/controllers/thing.controller.ts:8` (a blank line) → after:
+    `src/repositories/thing.repository.ts:8` (the `insertInto('things')`). A second,
+    purpose-built fixture (`nest-di-blindspot-location`) makes the two candidate locations
+    SHARE a line number, so the test cannot pass by getting only the file right.
+  - **The node ID was deliberately left keyed on the owner's file.** It is the per-owner
+    dedup identity every downstream count, snapshot and corpus baseline rests on; re-keying
+    it would merge effects across owners — a different change, owing a different proof
+    (E-100's rule). The LOCATION was the bug; the identity was not.
+  - **One correctness fix rode along:** the transaction scope id was
+    `tx:<owner file>:<txLine>`, and `txLine` is a line in the body that OPENED the scope.
+    Two different services with a transaction starting on the same line therefore collapsed
+    into one id, and O3 read a multi-table write as atomic when nothing joined the two. Now
+    qualified by the effect's own file — which can only SPLIT a scope, never merge one, so
+    the change can add a finding and never remove one.
+  - Two killing mutants (drop the stamp; ignore it at the consumer), suite green.
 - **What twenty's 139 actually are**, once located properly: 55 `fs_write` and 41
   `http_call` with computed targets, 34 `db_write` with an unresolved table (19 through a
   TypeORM `queryRunner`), 7 blind mutations, 2 skipped surfaces. Unlike novu's, these are
@@ -2416,3 +2435,273 @@ by the oracle, and conflating the two is what produced this entry.
 - **Rule:** **a flaky test is a coupling, not a probability.** Re-running until green hides which
   two things share state. Ask what the test READS that something else WRITES — and fix it on the
   reader, because that holds no matter who writes next.
+
+## E-114 — the formal paper asserted two properties the engine does not have
+
+- **Where:** `docs/THEOREM-DIFFERENTIAL-TOPOLOGICAL-PROOF.md`, prepared on
+  `claude/repo-exploration-30nl59`. Not a code defect — a DOCUMENT defect, and the most expensive
+  kind: `CLAUDE.md` sends every session to read the doc matching its task, so a paper with a ∎ is
+  the most authoritative artefact in the repo.
+- **Claim 1 — Théorème 1.1.** *"Pour tout programme P ∈ JS⁻, le graphe UBG(P) capture fidèlement le
+  flot de contrôle et de données."* Proof sketch: each syntactic construct maps to nodes and typed
+  edges **"de manière bijective"**. Three measured entries in this very file are the
+  counter-example: **E-092** (33 of twenty's 6090 files parsed), **E-097** (1479 of novu's 2039
+  constructor-DI hops resolving to nothing), **E-110** (mount prefixes wrong). None is a JS⁻
+  violation — all three are extractor limits on ordinary JavaScript. "Bijective" is precisely the
+  property SPARDA does not have, and every theorem in § 2 took it as hypothesis.
+- **Claim 2 — § 4.3 and the § 5 table.** *"SPARDA signale explicitement ces cas comme « non
+  analysable » (Exit 3)."* Measured: `src/` contains **no** detection of `eval` / `Function(` /
+  dynamic `import()`, and the only failure code emitted anywhere is `process.exitCode = 1`
+  (22 sites). **There is no Exit 3.** This one is worse than the first because it sat in the
+  LIMITATIONS section — the part whose whole job is to be the credibility anchor.
+- **And the hypothesis was never checked.** `P ∈ JS⁻` is assumed, never measured. That is
+  Direction 3 ("the analysed set is assumed to be the real set") lifted to the level of the paper —
+  structurally identical to E-104.
+- **Fix (correction n°4, applied):** Théorème 1.1 is replaced by three statements that are true of
+  the code — **1.1a** sound over-approximation (the engine may MISS behaviour, it can never INVENT
+  it), **1.1b** declared incompleteness, proven by an *executable* certificate
+  (`tests/no-silent-loss.test.js` + two fleet variants: an INDEPENDENT Babel walk re-enumerates
+  every registration and demands the extractor account for it — 122 assertions, and it may not
+  import the extractor's classification, per ADR-082), and **1.1c** what that does NOT establish
+  (file-set completeness and cross-module resolution — confided to `premise.js`, where `unmeasured`
+  withholds the word rather than granting it). § 2's preambles now say "the graph **produced by the
+  engine**" instead of "of a program P ∈ JS⁻", so their conclusions are about G, which is what they
+  always were. § 4.3 states the real state and files the detection as identified-not-done. The § 5
+  table drops its `100%` figures for Oui/Non — a percentage invites reading a measurement where
+  there is a proof — and **gains two rows** whose absence let silence pass for guarantee.
+- **Rule:** **a document is an artefact, and an artefact that over-claims is a defect with no test
+  to catch it.** Before writing `∎` about the engine, grep the engine. A property worth stating
+  formally is worth verifying first — and the version that survives verification is always the more
+  useful one, because it is the one you can defend.
+
+## E-115 — Flask entry detection lost its search marker in every subdirectory
+
+- **Symptom, as first reported:** the lab's `flask` target failed. That framing understates it —
+  the defect is in `src/detect.js`, which chooses WHICH FILE the whole analysis is about.
+- **Cause, one missing argument.** `searchPyFiles(dir, root, countRef, marker)` recursed as
+  `searchPyFiles(abs, root, countRef)`, dropping `marker` so every subdirectory was searched for
+  the DEFAULT `'FastAPI('`. **The bug is asymmetric by construction:** `findFastAPIEntry` passes the
+  default and worked by accident; `findFlaskEntry` is the only caller with a non-default marker and
+  lost it at the first directory boundary.
+- **Two failures, and the second is the one that matters.** Measured on purpose-built fixtures:
+
+  | Case | Result before the fix |
+  |---|---|
+  | Flask app with `Flask(__name__)` in a subdirectory | **THROW** — "Could not locate your Flask entry file". SPARDA refuses a valid app. Loud, safe direction. |
+  | Flask project containing a stray file with `FastAPI(` in a subdirectory | **`framework: flask, entry: sub/api.py`** — the FASTAPI file returned as the Flask entry |
+
+  In the second case SPARDA compiled the wrong file. The real `POST /pay` was never in the graph:
+  **no error, no blind spot, no premise gap** — because nothing knew another file existed. That is
+  Direction 3 (the analysed set silently is not the real set), reached through entry DETECTION
+  rather than through extraction, which is a channel no existing certificate covers. `1.1b`
+  (no registration lost in silence) cannot see it either: a file never opened produces no
+  registration to reconcile — exactly the residue Corollaire 1.1c names.
+- **Found by:** Gemini, while preparing the lab. Its diagnosis of the line was exactly right. Its
+  severity assessment was not — it read the symptom as an install failure of a lab target. Worth
+  recording: the finder was right about the WHERE and wrong about the COST, and the cost is what
+  decides whether a fix ships with a mutant.
+- **Where the fix was NOT.** The change had been committed inside the lab's container clone
+  (`/work/sparda`), which is ephemeral: `origin/main` never received it. A fix that lives only in a
+  throwaway working copy is a fix that will be re-discovered.
+- **Fix:** forward `marker` in the recursive call. Two git-tracked fixtures
+  (`flask-nested-entry`, `flask-nested-with-fastapi`), a regression test that pins BOTH cases plus
+  the asymmetry (the default-marker caller must stay unaffected), and a killing mutant.
+- **Rule:** **a recursive search must carry every parameter that defines what it is searching for.**
+  A default value is a convenience for the caller and a trap for the recursion: it makes the wrong
+  answer look like a legitimate one. And when a defect can change WHICH FILE is analysed, its
+  severity is never the error message — it is what the graph silently becomes.
+
+## E-116 — the injection round trip wrote into the shared fixture tree (E-113, second reader)
+
+- **Symptom:** `npm test` red at random on
+  `premise-convention.test.js > every fixture file this suite reads is tracked by git`,
+  listing `tests/fixtures/express-demo/src/sparda-router.js` and
+  `…/src/app.js.sparda-tmp` as untracked. Passing alone, passing on the next full run.
+- **Cause:** `sparda.test.js`'s inject → idempotency → remove round trip ran IN
+  `tests/fixtures/express-demo/`, so for its duration two generated files exist in the git
+  working tree. `premise-convention.test.js` is a different FILE, therefore a different
+  vitest worker, therefore parallel — and its audit walks `tests/fixtures/` and compares
+  against `git ls-files`. Both tests correct, one shared directory, a race whose odds
+  depend on machine speed. This is E-113 again with a different reader: same writer, same
+  tree, a symptom the first fix could not cover.
+- **Why the E-113 fix did not extend.** E-113 was fixed reader-side (`copyFixture` skips
+  `.sparda/`), argued as holding "no matter what any other test does". That argument does
+  not survive contact with THIS reader: the audit's entire job is to notice untracked files
+  under `tests/fixtures/`, so every exemption added for a generated artefact is a place a
+  genuinely untracked fixture can later hide. The audit already carried four such
+  exemptions (`__pycache__`, `sparda.json`, `sparda_router.py`, `*.syntax-check.py`) — the
+  list was growing toward the point where it exempts the thing it exists to catch.
+- **Fix:** both round trips (Express and FastAPI) now `copyFixture` into
+  `tests/.tmp/inject-<fixture>/` and run there, removing it at the end. A temp copy is a
+  real directory tree, so the byte-for-byte claim the test exists to make is untouched, and
+  the fixture directory is never written to by any test again. Verified by four consecutive
+  full-suite runs and by `git status tests/fixtures/` staying clean across them.
+- **Rule:** **a test never writes into a directory another test reads.** When a shared
+  resource races, fix the WRITER: a reader-side exemption fixes one reader and quietly
+  raises the cost of the next one. And an audit that must be taught exceptions is an audit
+  losing the ability to fail.
+
+## E-117 — `routes: 0` was a fact about a FILE, printed as a fact about the APP
+
+- **Symptom (in the wild, found by the lab):** a research lab pointed SPARDA at a working
+  Flask app and got a dossier reading
+  `{"app": "flask-realworld-example-app", "verdict": "NO_PROOF", "routes": 0, "guards": 0}`.
+  The conclusion drawn from it was that **SPARDA cannot read Python** — for two frameworks
+  it reads fine (`tests/fixtures/ubg-flask`: 4 routes, 1 verified guard, coverage 100%,
+  2 findings; `fastapi_extract.py` handles `@app.route`, Blueprints, `MethodView`,
+  Flask-RESTful, Flask-SQLAlchemy and the Flask auth decorators).
+- **Cause, reproduced exactly.** Restoring the `detect.js` that npm 0.71.3 ships (i.e.
+  before E-115) and running SPARDA on `tests/fixtures/flask-nested-with-fastapi`:
+
+  ```
+  npm 0.71.3 : {"verdict":"NO_PROOF","routes":0,"guards":0}   ← the lab's dossier, verbatim
+  main       : {"verdict":"SURFACE","routes":1,...}
+  ```
+
+  E-115 made entry detection pick a stray `FastAPI(` file as the Flask entry. SPARDA then
+  analysed **one wrong file**, correctly found no routes in it, and said so.
+- **Why nothing caught it, and this is the entry's whole point.** The output was not
+  malformed and not an error:
+  - exit **1** — the same code a legitimate `NOT PROVEN` uses;
+  - stderr **empty**;
+  - stdout: **valid JSON** carrying a **legitimate verdict word** (`NO_PROOF` is what
+    `verdictState` returns for `!provable`, i.e. zero routes).
+
+  There was nothing to detect. A consumer was *right* to record it as a verdict. The
+  defect is that the verdict's SUBJECT was never stated, so "0 routes" could only be read
+  as a claim about the app.
+- **Related, and worth separating from the fix.** The exit code is overloaded: a verdict
+  and a "SPARDA could not run" (missing Python, no entry found) both exit 1 — verified by
+  removing `python` from PATH. That overload also misleads pipelines, but it is **not**
+  this bug: here the run succeeded and produced a real verdict. Splitting the exit codes
+  would not have helped, which is precisely why it was not the fix.
+- **Fix (option B, additive):** `prove --json` states `framework` and `entry` **before**
+  the verdict, and the zero-route line names the file: `◦ analysed as flask, entry:
+  sub/api.py`. On a Flask project that is legible in one second, by a human or by a rule.
+  Chosen over changing the exit codes because it is the only one of the two that addresses
+  the actual failure, and because adding fields breaks no consumer while renumbering exit
+  codes changes a contract published in `README.md:31` and forwarded raw by
+  `action.yml:97`.
+- **Rule:** **a count states what it counted, in the same breath.** A measurement whose
+  subject is implicit is read against the subject the reader already has in mind — here,
+  "my app" instead of "one file" — and the two only coincide while nothing upstream is
+  wrong. This is hard rule 13 one level out: the admission belongs inside the number, and
+  so does the number's subject.
+
+
+## E-118 — settling is not draining, and E-110 fixed one of four ways to stop
+
+- **Symptom:** `tests/probe.test.js` → *"carries the app's OWN error out, instead of dropping it
+  on the floor"* failed intermittently. `probed.diagnostic.stderrTail` came back `''` instead of
+  carrying the app's `ECONNREFUSED`. It passed alone and failed in the parallel suite, which is
+  the shape everyone reads as "flaky test, re-run it". It is not a test problem.
+- **It reproduces with NO test framework involved.** Calling `probeRoutes` directly on the same
+  fixture: **2–3 EMPTY in 12 runs under CPU load, 0 EMPTY in 8 runs idle.** A bare `fork` without
+  the probe's shim never loses the bytes — 12/12 delivered, with `stderr.end` always preceding
+  the child's `close`. So the parent's stream handling was never the defect.
+- **Root cause, measured not reasoned.** The probe has **FOUR** ways to stop: the kill timer, the
+  shim's `__done__` IPC message, a child `error`, and the child's `close`. Only `close` implies
+  the stdio streams are finished, and **the one that actually fires is `__done__`**.
+  `src/probe/express-shim.cjs` registers `process.on('exit', sendDone)`, so an app that writes its
+  error and calls `process.exit(1)` sends `__done__` over the **IPC channel** while its stderr
+  bytes are still travelling down a **different pipe**. The parent settled on the message and read
+  `stderrTail` before the `data` callback had run.
+  Two independent tells confirm it, and neither is an inference: the EMPTY runs settle in
+  **91–136 ms**, nowhere near the 8000 ms timeout; and `diagnostic.state` is `not-instrumented` on
+  **every** run including the good ones — which can only happen if `exitCode` was still `null`,
+  i.e. the settle ran before the parent's own `exit` handler.
+- **Amends E-110 (append-only — E-110 is not rewritten).** E-110 moved the settle from `exit` to
+  `close` and recorded *"Settling on `close` (stdio drained) is deterministic; verified by three
+  consecutive full runs."* Both halves are wrong as stated. `close` does drain — but it was never
+  the path that settles this case, so the parenthetical describes a guarantee the code does not
+  rely on; and *"verified by three consecutive full runs"* was three runs on an idle machine,
+  which is precisely the condition under which this defect does not appear. **A race verified
+  without load is a race not verified.**
+- **Why it survived.** Three reasons, and each is reusable. The failure is in the SAFE direction:
+  an empty `stderrTail` yields `premise.basis = unmeasured`, which per E-104/ADR-091 **withholds**
+  `PROVEN` — so no verdict was ever wrong and nothing downstream branches on `diagnostic` (it feeds
+  a human `reason` and a reported `probeState`, nothing else). It wore the costume of a flaky test,
+  and a flaky test invites a re-run rather than a diagnosis. And it hid behind a FIXED label:
+  E-110 had closed a stderr race in the same function, so the residue read as "the known one".
+- **The fix.** `afterDrain(stream, graceMs, done)` is applied to `settle` itself rather than to any
+  one path into it, so all four stop paths build the diagnostic after the bytes have arrived. The
+  child is killed first (which closes the pipe, so a live app's stderr can end at all), and the
+  grace is a **named, declared bound** — `DRAIN_GRACE_MS` — because bytes that were never written
+  are not bytes that can be waited for. Measured after: **16/16 delivered under the identical load
+  that produced 2–3/12 EMPTY**, at ~90 ms, i.e. resolving on `end` and not on the cap.
+- **Mislabel corrected in the same change.** This race was called *"the pre-existing E-109 race"*
+  in the PR #55 merge commit body, in `docs/HANDOFF.md`, and in the PR #55/#56 descriptions.
+  **E-109 is a different bug** (*the runtime oracle was inert on every ESM Express app*);
+  `tests/probe.test.js` merely carries `(E-109)` because it is E-109's regression test. The nearest
+  true relative is **E-110**, and the residue is this entry.
+- **Rule:** **a bug that already has a FIX in the same function is the easiest one to mislabel, and
+  a race "verified" on an idle machine is not verified.** When a known fix and a live symptom share
+  an address, measure which of the code's exit paths actually fires before assuming the old
+  diagnosis still holds — and reproduce the symptom with the test framework removed, so "flaky
+  test" cannot absorb a product defect.
+
+
+## E-119 — a green branch and a red `main`, because Windows only runs on `main`
+
+- **Symptom:** three PRs (#57, #56, #58) were merged with every gate green, and `main` went
+  **red** at `bfb2431` and stayed red at `159228e`. Each feature branch's CI had passed.
+  `tests/nest-class-seeding.test.js` → *"the binding map proves exactly one controller here"*:
+  `expected [ Array(1) ] to deeply equal [ Array(1) ]`, the received value being
+  `D:\a\sparda-hq\...\shared.controller.ts#SharedController`.
+- **Root cause: a POSIX-only assertion, in the TEST, not the product.** The binding map is keyed
+  `<absolute file>#<Class>` and the file carries **native** separators. The assertion did
+  `k.split('/').pop()` to reduce it to a filename — which on Windows splits on a character the
+  string does not contain and returns the whole path. Demonstrated rather than argued: on the
+  exact key CI reported, `k.split('/').pop()` is the identity.
+- **The product is not affected, and the run proves it.** Windows reported **1 failed, 1664
+  passed** — every behavioural assertion in the same file passed there, including
+  `POST /shared/by-body → dataOrigins ['body.*']`. The key is only ever compared against
+  `mod._file` from the same resolver, so both sides carry the same separators on either platform.
+  Nothing was wrong with `provedProviderBindings`; the test could not read its own output.
+- **Why it survived until `main`, and this is the structural half.** `.github/workflows/ci.yml`
+  runs the cross-OS matrix **only on push to `main`** — pull requests are Ubuntu-only, a
+  deliberate and documented decision (*"Windows runners bill at 2x Actions minutes … so the
+  2,000-minute monthly quota lasts"*). **A branch being green is therefore not evidence that
+  `main` will be.** Three merges went in on branch-green, and nobody looked at `main`'s run
+  afterwards — including the author, who replayed six local gates on each merge commit and never
+  opened CI.
+- **Family.** E-101, E-102, E-103 are the same shape one layer out: a Windows-only failure in
+  machinery everyone had verified on Linux. The lesson did not transfer because it was filed
+  against the release gate, and this arrived through a test assertion.
+- **Fix.** Assert the WHOLE key, built with `path.join`. Platform-agnostic by construction and
+  strictly stronger than matching a tail — it now pins the file as well as the class. A repo-wide
+  sweep for `split('/')` in `tests/` found two other hits, both correct: one splits a hardcoded
+  POSIX literal before `path.join`, the other splits npm package specifiers, which are `/` by
+  definition.
+- **Rule:** **a gate that does not run on every push is not a gate you may read as one.** When CI
+  is deliberately narrower on branches than on the trunk, "the branch is green" answers a smaller
+  question than the one being asked at merge time — so the trunk's run must be READ after merging,
+  not assumed. And never reduce a filesystem path with a hardcoded separator: `path` has the
+  functions for it precisely because the separator is not a constant.
+
+
+## E-120 — flattening setup scopes turned an Express lookalike into an official route
+
+- **Symptom:** a fixture with a real top-level `const express = require('express')` and a nested
+  `const express = fakeExpress` produced the nested fake route and its DB write as if Express had
+  registered them. The same happened for nested bindings named `app` and `Router`. A proven app
+  reassigned to a fake implementation also retained route credit.
+- **Root cause:** `flattenSetup` intentionally opens setup-function bodies, but the receiver
+  classifier stored app/router identities in module-wide `Set<string>` collections. Once syntax
+  from distinct scopes shared a statement stream, identifier spelling replaced lexical identity;
+  `express()`, `Router()` and `const api = app` were trusted by name, without proving the binding's
+  package origin or lifetime.
+- **Why it matters:** this is unsafe, not merely incomplete. The lowering could manufacture both
+  a served route and effects reachable only through that fabricated route, violating
+  `falseProven = 0` before any later grader had a chance to abstain.
+- **Fix:** retain each AST identifier's Babel `Binding`, seed factories only from the official
+  `express` import/require forms, propagate app/router aliases by exact binding, and mark a proven
+  object ambiguous after any non-congruent write. Registrations through an ambiguous receiver use
+  the existing `UnknownHandler` path; shadowed lookalikes receive no framework credit.
+- **Proof:** one adversarial fixture isolates official CJS app/router forms, three lexical
+  lookalikes and one reassignment. Existing ESM, CommonJS and TypeScript import-equals fixtures stay
+  green. Two dedicated mutants are killed; the full mutation campaign is **335/335**. The pinned
+  corpus is **8/0/0** and `bench:soundness` remains `falseProven: 0`.
+- **Rule:** **flattened syntax may share a walk, but it may never share proof by name.** Preserve
+  lexical binding identity and official origin across the flattening boundary, or emit declared
+  uncertainty.

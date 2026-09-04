@@ -1,0 +1,43 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "twenty-stripe-webhook",
+  "classification": "safe",
+  "measurement": "scored",
+  "hardNegative": true,
+  "type": "verified-webhook",
+  "route": {
+    "method": "POST",
+    "path": "/webhooks/stripe"
+  },
+  "scope": {
+    "status": "measured",
+    "reason": "The webhook route and external billing effects are extracted; signature verification is an indirect helper boundary."
+  },
+  "origin": {
+    "repository": "twentyhq/twenty",
+    "url": "https://github.com/twentyhq/twenty",
+    "corpus": "twenty",
+    "appDir": "packages/twenty-server",
+    "commit": "590ae069e8aadd6a4df1738fd3a47ce7d380b250",
+    "source": [
+      {
+        "path": "packages/twenty-server/src/engine/core-modules/billing-webhook/billing-webhook.controller.ts",
+        "sha256": "356c2345450a9453457cb827635cf34ddf9ea9aebb717a07c3e6b6d3fa0a7b47",
+        "fingerprint": "356c2345450a9453457cb827635cf34ddf9ea9aebb717a07c3e6b6d3fa0a7b47"
+      },
+      {
+        "path": "packages/twenty-server/src/engine/core-modules/billing/stripe/services/stripe-webhook.service.ts",
+        "sha256": "6a4cd2d8ede803e9840fbaf7dfcfd8b0caecd1f9cf457e1d5145fd7bde074bd6",
+        "fingerprint": "6a4cd2d8ede803e9840fbaf7dfcfd8b0caecd1f9cf457e1d5145fd7bde074bd6"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "A public webhook is safe for the tested unauthenticated-mutation property when its raw body and signature are verified against the provider's configured webhook secret before dispatch.",
+    "why": "handleWebhooks calls constructEventFromPayload before handleStripeEvent; that helper delegates to Stripe's constructEvent with BILLING_STRIPE_WEBHOOK_SECRET."
+  },
+  "safeFor": [
+    "authorization"
+  ]
+}

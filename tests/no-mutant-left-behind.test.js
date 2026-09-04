@@ -78,6 +78,23 @@ describe('no mutant left behind (E-108)', () => {
     expect(lost).toEqual([]);
   });
 
+  it('every mutant targets EXACTLY ONE site — an ambiguous find mutates the wrong line', () => {
+    // Presence was the only thing checked here, and presence is not enough: the
+    // harness applies `String.replace`, which takes the FIRST occurrence. When a new
+    // function happened to repeat an existing mutant's find string, that mutant
+    // silently moved onto the new code and stopped guarding the line it was written
+    // for — still "found", still killed, guarding nothing. Two more pairs were
+    // already ambiguous and had never tested their second occurrence.
+    const ambiguous = [];
+    for (const m of MUTANTS) {
+      const src = read(m.file);
+      if (src == null) continue; // the test above owns the missing-file case
+      const hits = src.split(m.find).length - 1;
+      if (hits > 1) ambiguous.push(`${m.file} (${hits} sites) :: ${m.desc}`);
+    }
+    expect(ambiguous).toEqual([]);
+  });
+
   it('the test each mutant is graded by exists', () => {
     const missing = MUTANTS.filter((m) => !fs.existsSync(path.join(repo, m.test))).map(
       (m) => `${m.test} :: ${m.desc}`,

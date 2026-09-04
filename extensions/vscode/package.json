@@ -2,13 +2,13 @@
   "name": "sparda",
   "displayName": "SPARDA — prove AI-written code",
   "description": "The trust layer for AI-written code. AI writes, SPARDA proves. Deterministic, offline behavior proofs + a live gate for AI edits, right in the editor.",
-  "version": "0.71.5",
+  "version": "0.72.1",
   "icon": "logo.png",
-  "publisher": "zakariagharzouli",
+  "publisher": "zyx77550",
   "license": "BUSL-1.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zakariagharzouli/sparda.git"
+    "url": "https://github.com/zyx77550/sparda-hq.git"
   },
   "engines": {
     "vscode": "^1.85.0"

@@ -1,0 +1,40 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "nodegoat-login-enumeration",
+  "classification": "vulnerable",
+  "measurement": "listed",
+  "type": "user-enumeration",
+  "route": {
+    "method": "POST",
+    "path": "/login"
+  },
+  "scope": {
+    "status": "outside-current-obligation",
+    "reason": "This is an external Express route-discovery and blindspot case, not a claim that SPARDA currently proves authentication-message equivalence."
+  },
+  "origin": {
+    "repository": "OWASP/NodeGoat",
+    "url": "https://github.com/OWASP/NodeGoat",
+    "corpus": "nodegoat",
+    "appDir": ".",
+    "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+    "source": [
+      {
+        "path": "app/routes/index.js",
+        "sha256": "149ebc1e7e78e40ae3da739f44ae9d5c84d672826a652d822ec6ba33aae96d96",
+        "fingerprint": "3ab970b2888bc1501515db24a83cc7851ac9c09d00948c652300401515185eb5"
+      },
+      {
+        "path": "app/routes/session.js",
+        "sha256": "1454b846d63dcd98cbd92364a5be23b4031c2fb4caa520ab731dde973bd06a4e",
+        "fingerprint": "e53e38b6eea76b026efaacde07f694e7a2eca005de4083fb74f9393d432a5b25"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "The upstream handler annotates the distinct username/password errors as the broken-authentication path and names the identical-error fix.",
+    "why": "handleLoginRequest renders a different error for noSuchUser and invalidPassword."
+  },
+  "missCause": "the CommonJS route and handler chain are linked; response-equivalence semantics remain outside the current proof obligation"
+}

@@ -21,7 +21,7 @@ import {
   emptyGenome,
   recall,
 } from '../ubg/genome.js';
-import { premiseFor, basisFrom } from '../ubg/premise.js';
+import { certifiableOrgan, basisFrom } from '../ubg/premise.js';
 import { atomicWriteFileSync as atomicWrite } from '../server/persistence.js';
 
 const GENOME_FILE = 'sparda-genome.jsonl';
@@ -36,7 +36,9 @@ export async function runGenome(opts) {
   // contribution is signed, content-addressed and merged into a file other people pull, and
   // a genome that silently under-represents an app teaches the world that the surface it
   // covers IS the app. The gaps are named below rather than counted.
-  const premise = await premiseFor(canonical, compiled.report, { cwd: opts.cwd });
+  const premise = await certifiableOrgan('genome').premise(canonical, compiled.report, {
+    cwd: opts.cwd,
+  });
   const capsule = buildCapsule(canonical, { premiseBasis: basisFrom(premise) });
   const identity = loadOrCreateIdentity(opts.cwd);
   const minted = mintGenome(capsule, identity);

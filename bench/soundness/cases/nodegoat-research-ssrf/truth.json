@@ -1,0 +1,40 @@
+{
+  "schema": "sparda-soundness-case/v1",
+  "id": "nodegoat-research-ssrf",
+  "classification": "vulnerable",
+  "measurement": "listed",
+  "type": "server-side-request-forgery",
+  "route": {
+    "method": "GET",
+    "path": "/research"
+  },
+  "scope": {
+    "status": "outside-current-obligation",
+    "reason": "This probes route discovery and CommonJS interprocedural linking before SSRF-specific semantics, which SPARDA does not currently claim."
+  },
+  "origin": {
+    "repository": "OWASP/NodeGoat",
+    "url": "https://github.com/OWASP/NodeGoat",
+    "corpus": "nodegoat",
+    "appDir": ".",
+    "commit": "c5cb68a7084e4ae7dcc60e6a98768720a81841e8",
+    "source": [
+      {
+        "path": "app/routes/index.js",
+        "sha256": "149ebc1e7e78e40ae3da739f44ae9d5c84d672826a652d822ec6ba33aae96d96",
+        "fingerprint": "3ab970b2888bc1501515db24a83cc7851ac9c09d00948c652300401515185eb5"
+      },
+      {
+        "path": "app/routes/research.js",
+        "sha256": "f1b8763f59eb14eb3e3b68158028c25f039a5303fdc00d2ba5d42153f1f6e684",
+        "fingerprint": "e399f3c70436fa160f00835626bf50f88980268fcd143436af97c9d2297c1d92"
+      }
+    ]
+  },
+  "label": {
+    "labelledBy": "Codex manual static review, 2026-07-31",
+    "criterion": "The external application is intentionally vulnerable and its handler passes a request-composed URL to an HTTP client without an allow-list.",
+    "why": "displayResearch concatenates req.query.url and req.query.symbol, then calls needle.get on that attacker-controlled URL."
+  },
+  "missCause": "the CommonJS route and handler chain are linked; SSRF data flow is a separately declared future capability"
+}

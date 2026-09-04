@@ -1,0 +1,4 @@
+const express = require('express');
+const router = express.Router();
+router.get('/from-outside', (req, res) => res.json({}));
+module.exports = router;
