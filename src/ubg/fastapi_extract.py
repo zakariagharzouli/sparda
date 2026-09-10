@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+from fastapi_constants import registration_path
 
 MAX_EFFECTS = 40
 MAX_RETURN_SHAPES = 10
@@ -178,18 +179,19 @@ SA_BUILDERS = {
 }
 
 
-def sa_builder_effect(arg):
+def sa_builder_effect(arg, context):
     """SQLAlchemy 2.0 statement builders: select(User) / insert(User).values(…) /
-    update(User).where(…) / delete(User) — the model Name is the table, however
-    deep the method chaining goes (the open-webui shape)."""
+    update(User).where(…) / delete(User). Physical tables require declarations;
+    a class name is not a table name. Imports establish builder provenance."""
     cur = arg
     for _ in range(8):
-        if (isinstance(cur, ast.Call) and isinstance(cur.func, ast.Name)
-                and cur.func.id in SA_BUILDERS and cur.args
-                and isinstance(cur.args[0], ast.Name)):
-            effect_type, op = SA_BUILDERS[cur.func.id]
+        qualified = dotted_name(cur.func) if isinstance(cur, ast.Call) else None
+        if (isinstance(cur, ast.Call) and context and qualified in context["builders"]
+                and cur.args):
+            effect_type, op = SA_BUILDERS[context["builders"][qualified]]
+            table = context["table_of"](dotted_name(cur.args[0]))
             return {"effectType": effect_type, "op": op,
-                    "table": cur.args[0].id.lower()}
+                    "table": table, "opaque": table is None}
         if isinstance(cur, ast.Call) and isinstance(cur.func, ast.Attribute):
             cur = cur.func.value  # unwrap .values(…)/.where(…)/.join(…) chains
         else:
@@ -299,7 +301,7 @@ def is_tx_context(expr):
     return False
 
 
-def scan_function(fn):
+def scan_function(fn, sa_context=None):
     out = {
         "effects": [],
         "returnShapes": [],
@@ -319,7 +321,7 @@ def scan_function(fn):
                 and n.value.func.id[:1].isupper()):
             var_models[n.targets[0].id] = n.value.func.id.lower()
     ctx = {"tx": None, "iso": "default", "tryId": None, "catchOf": None,
-           "var_models": var_models}
+           "var_models": var_models, "sa_context": sa_context}
     for stmt in fn.body:
         _visit(stmt, out, ctx)
     return out
@@ -451,7 +453,7 @@ def inspect_call(node, out, ctx):
                 parsed["driver"] = root or "unknown"
                 push_effect(out, ctx, parsed)
                 return
-        built = sa_builder_effect(node.args[0])
+        built = sa_builder_effect(node.args[0], ctx.get("sa_context"))
         if built:
             built["line"] = line
             built["driver"] = root or "unknown"
@@ -593,7 +595,11 @@ def depends_target(default_node):
     f = default_node.func
     name = f.id if isinstance(f, ast.Name) else (
         f.attr if isinstance(f, ast.Attribute) else None)
-    if name != "Depends":
+    if getattr(default_node, "_sparda_security", False):
+        name = "Security"
+    if name not in ("Depends", "Security"):
+        return None
+    if name != "Depends" and not getattr(default_node, "_sparda_security", False):
         return None
     if default_node.args and isinstance(default_node.args[0], ast.Name):
         return default_node.args[0].id
@@ -650,7 +656,7 @@ class UbgExtractor:
         if cached is not None:
             return cached
         mod = {"file": abs_file, "functions": {}, "classes": {},
-               "instances": {}, "imports": {}}
+               "instances": {}, "imports": {}, "import_names": {}}
         try:
             with open(abs_file, "r", encoding="utf-8") as f:
                 tree = ast.parse(f.read(), filename=abs_file)
@@ -669,6 +675,7 @@ class UbgExtractor:
                                 or self.resolve_import(abs_file, m))
                     if resolved:
                         mod["imports"][local] = resolved
+                        mod["import_names"][local] = n.name
             elif isinstance(node, ast.Import):
                 for n in node.names:
                     resolved = self.resolve_import(abs_file, n.name)
@@ -695,8 +702,78 @@ class UbgExtractor:
             return cls, mod
         imported = mod["imports"].get(name)
         if imported:
-            return self.resolve_class(self.parse_module(imported), name, depth + 1)
+            return self.resolve_class(self.parse_module(imported),
+                                      mod["import_names"].get(name, name), depth + 1)
         return None
+
+    def explicit_table(self, mod, name):
+        if not name or not mod or "error" in mod:
+            return None
+        if "." in name:
+            receiver, name = name.split(".", 1)
+            target = mod["imports"].get(receiver)
+            if not target:
+                return None
+            mod = self.parse_module(target)
+        hit = self.resolve_class(mod, name)
+        if not hit:
+            return None
+        cls, owner = hit
+        for statement in owner["tree"].body:
+            if not isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                continue
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            if any(dotted_name(target) in (cls.name, cls.name + ".__tablename__") for target in targets):
+                return None
+        # Record the defining module in the compilation source-hash boundary.
+        relative = self.rel(owner["file"])
+        if relative not in self.scanned_files:
+            self.scanned_files.append(relative)
+        declarations = [n for n in cls.body if isinstance(n, ast.Assign)
+                        and any(isinstance(t, ast.Name) and t.id == "__tablename__"
+                                for t in n.targets)]
+        if len(declarations) != 1:
+            return None
+        value = lit(declarations[0].value)
+        return value if isinstance(value, str) and value else None
+
+    def semantic_scan(self, fn, mod):
+        builders = {}
+        for declaration in mod["tree"].body:
+            if isinstance(declaration, ast.ImportFrom):
+                source = declaration.module or ""
+                if (declaration.level == 0 and source.startswith("sqlalchemy")
+                        and (source == "sqlalchemy" or source.startswith("sqlalchemy."))
+                        and not self.resolve_import(mod["file"], source)):
+                    for alias in declaration.names:
+                        if alias.name in SA_BUILDERS:
+                            builders[alias.asname or alias.name] = alias.name
+            elif isinstance(declaration, ast.Import):
+                for alias in declaration.names:
+                    if alias.name == "sqlalchemy" and not self.resolve_import(mod["file"], alias.name):
+                        for operation in SA_BUILDERS:
+                            builders[(alias.asname or alias.name) + "." + operation] = operation
+        shadowed = set(mod["functions"]) | set(mod["classes"]) | set(mod["instances"])
+        table_shadowed = set()
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                shadowed.add(node.id)
+                table_shadowed.add(node.id)
+            elif isinstance(node, ast.arg):
+                shadowed.add(node.arg)
+                table_shadowed.add(node.arg)
+        for declaration in mod["tree"].body:
+            if isinstance(declaration, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                targets = declaration.targets if isinstance(declaration, ast.Assign) else [declaration.target]
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        shadowed.add(target.id)
+                        table_shadowed.add(target.id)
+        builders = {key: operation for key, operation in builders.items()
+                    if key.split(".")[0] not in shadowed}
+        return scan_function(fn, {"builders": builders,
+                                  "table_of": lambda name: self.explicit_table(mod, name)
+                                  if name and name.split(".")[0] not in table_shadowed else None})
 
     def method_in_class_chain(self, cls, mod, name, depth=0):
         """find `name` on cls or up its bases → (fn, declaring mod). The Python
@@ -755,7 +832,7 @@ class UbgExtractor:
         if key in stack:
             return None
         stack.add(key)
-        base = scan_function(fn)
+        base = self.semantic_scan(fn, decl_mod)
         bundle = clone_scan(base)
         bundle["key"] = key[0] + "#" + key[1]
         decl_rel = self.rel(decl_mod["file"])
@@ -783,7 +860,7 @@ class UbgExtractor:
         if key in stack:
             return None
         stack.add(key)
-        base = scan_function(fn)
+        base = self.semantic_scan(fn, tmod)
         bundle = clone_scan(base)
         bundle["key"] = key[0] + "#" + name
         fn_rel = self.rel(tmod["file"])
@@ -852,7 +929,7 @@ class UbgExtractor:
     def deep_scan(self, fn, mod, bindings=None):
         """a body's real scan = its own effects + everything follow_calls
         resolves below it. The Python analogue of resolve.js#deepScan."""
-        base = scan_function(fn)
+        base = self.semantic_scan(fn, mod)
         merged = clone_scan(base)
         self.follow_calls(fn, mod, merged, set(), 0, None, set(), bindings)
         return merged
@@ -904,6 +981,10 @@ class UbgExtractor:
             })
             return
         rel_file = self.rel(abs_file)
+        from fastapi_security import mark_security_calls
+        for line in mark_security_calls(tree, self.root, abs_file):
+            self.skipped.append({"reason": "Security binding not proven from fastapi import",
+                                 "file": rel_file, "line": line, "risk": "high"})
         self.scanned_files.append(rel_file)
         modctx = self.parse_module(abs_file)  # the walk's view of this file
 
@@ -986,7 +1067,7 @@ class UbgExtractor:
                 "name": name,
                 "sourceFile": rel_file,
                 "sourceLine": fn.lineno,
-                "scan": scan_function(fn),
+                "scan": self.semantic_scan(fn, modctx),
             }
             self.helpers.append(step)
             if is_global_mw:
@@ -1015,7 +1096,9 @@ class UbgExtractor:
             if not found:
                 continue
             dec, obj_name, methods = found
-            raw_path = lit(dec.args[0]) if dec.args else None
+            path_expression = dec.args[0] if dec.args else next(
+                (kw.value for kw in dec.keywords if kw.arg == "path"), None)
+            raw_path = registration_path(tree, path_expression)
             if not isinstance(raw_path, str):
                 # The decorator IS a registration — the framework will serve this
                 # route — we simply cannot read its URL. The registration invariant

@@ -213,6 +213,10 @@ a marked `post-commit` git hook running `sparda-mcp sync --quiet`.
 | `src/commands/grammar.js` | grammar command — infers sequence and parameter relationships (R3.3) |
 | `src/commands/evolve.js` | evolve command — Darwinian trials of candidate circuits against the twin (R3.4) |
 | **`src/ubg/`** | the behavior compiler — extractors, translator, linker, 8 passes, serializer, `apocalypse.js`, `mirror.js`, `openapi.js`/`openapi-emit.js`, `verify.js` |
+| `src/ubg/local-return-paths.js` | bounded local producer return alternatives for data-flow evidence; no branch-execution or policy credit |
+| `src/ubg/authorization-policy.js` | optional caller-supplied obligations over compiled filters and middleware registrations; separate from automatic grading |
+| `src/ubg/session-admission.js` | bounded AST description of session middleware; no authorization proof credit |
+| `src/ubg/identity-risk.js` | automatic request/session identity divergence risk, joined to route-local database paths; policy violation and exploitability remain null |
 | `src/ubg/premise.js` | the premise verifier — diffs the compiled entrypoints against an oracle that is not the analyser; `PROBEABLE` (runtime, opt-in) vs `CONVENTION_ROUTED` (boot-free, unasked). **`premiseFor` + `withPremiseGaps` are the ONE call every verdict-emitting command makes** (ADR-083) |
 | `src/ubg/oracle-static.js` | the boot-free oracle — the route table Next / Medusa / Strapi / Nest conventions imply. Imports no extractor, by law |
 | `src/ubg/blindspots.js` | the ledger — every surface SPARDA could not bring into the graph, ranked by risk; `blindHigh` bars `PROVEN` |

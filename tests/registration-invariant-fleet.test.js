@@ -170,9 +170,9 @@ describe('registration invariant — Next.js', () => {
 });
 
 describe.skipIf(!hasPython)('registration invariant — FastAPI', () => {
-  const dir = fx('ubg-fastapi-ghost');
+  const dir = fx('ubg-fastapi-dynamic');
 
-  it('a decorator path that is not a literal is declared', () => {
+  it('a decorator path requiring execution is declared', () => {
     const out = extractFastAPI(dir, 'main.py', pythonCmd);
     expectDeclared(out, { via: 'dynamic-decorator-path:delete', file: 'main.py' });
     // the declaration names the HANDLER — the only stable identity a route without a

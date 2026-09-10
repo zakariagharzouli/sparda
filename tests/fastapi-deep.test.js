@@ -4,7 +4,8 @@
 // `self.<m>()` sibling dispatch inside the service class, and through deep-scanned
 // dependencies (`Depends(get_current_user)` reads the user table — real, provable
 // behavior on every route it guards). SQLAlchemy 2.0 statement builders
-// (`insert(Item).values(…)`, `scalars(select(Item))`) name their table.
+// (`insert(Item).values(…)`, `scalars(select(Item))`) retain their operation;
+// the fixture's unmapped Item class does not establish a physical table.
 // Before this, open-webui read 456 routes / ZERO db effects (coverage 0%).
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
@@ -18,7 +19,7 @@ const graphOf = () => canonicalizeGraph(compileUBG(APP, { write: false }).graph)
 const effectsOf = (g) => g.nodes.filter((n) => n.kind === 'effect');
 
 describe('FastAPI deep resolution — the resolve.js contract in Python', () => {
-  it('follows the module-level singleton into the service class (SA 2.0 builder table)', () => {
+  it('follows the module singleton without inventing a table for an unmapped class', () => {
     // POST /items/ -> Items.insert_new_item() -> session.execute(insert(Item))
     const effects = effectsOf(graphOf());
     expect(
@@ -26,7 +27,8 @@ describe('FastAPI deep resolution — the resolve.js contract in Python', () => 
         (n) =>
           n.meta.effectType === 'db_write' &&
           n.meta.op === 'insert' &&
-          n.meta.table === 'item',
+          n.meta.table === undefined &&
+          n.meta.opaque === true,
       ),
     ).toBe(true);
   });
@@ -39,7 +41,8 @@ describe('FastAPI deep resolution — the resolve.js contract in Python', () => 
         (n) =>
           n.meta.effectType === 'db_read' &&
           n.meta.op === 'select' &&
-          n.meta.table === 'item',
+          n.meta.table === undefined &&
+          n.meta.opaque === true,
       ),
     ).toBe(true);
   });

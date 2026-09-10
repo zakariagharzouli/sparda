@@ -176,6 +176,7 @@ export function translate({
         {
           role: 'function',
           async: scan.async,
+          ...(scan.sessionAdmission ? { sessionAdmission: scan.sessionAdmission } : {}),
           ...(kind === 'guard'
             ? { guardType: guardTypeOf(h.name, scan), verified: gf.verified }
             : {}),
@@ -467,6 +468,7 @@ function ensureChainNode(graph, step, scanCache) {
       {
         role: step.role,
         async: scan.async,
+        ...(scan.sessionAdmission ? { sessionAdmission: scan.sessionAdmission } : {}),
         ...(opaque ? { opaque: true } : {}),
         ...(kind === 'guard'
           ? { guardType: guardTypeOf(step.name, scan), verified: gf.verified }

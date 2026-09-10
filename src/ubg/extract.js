@@ -11,6 +11,8 @@ import path from 'node:path';
 import { parse } from '@babel/parser';
 import { MONGO_ARG_ROLES, MONGO_COLLECTION_OPS } from './kernel/contracts.js';
 import { localFunctions } from './kernel/bindings.js';
+import { localReturnPaths } from './local-return-paths.js';
+import { sessionAdmission } from './session-admission.js';
 
 const MAX_EFFECTS = 40;
 const MAX_RETURN_SHAPES = 10;
@@ -1434,6 +1436,31 @@ function firstModuleFile(base) {
 // tsconfig baseUrl + paths, resolved from the nearest ancestor project. Cached per
 // directory so the walk-up + read happens once. `null` = no project found.
 const tsconfigCache = new Map();
+
+// Only the alias-resolution projection is modelled here. Other compiler options,
+// installed packages and bundler behaviour are not certified by this receipt.
+export function configurationResolution(cwd) {
+  const unique = new Map();
+  for (const config of tsconfigCache.values()) {
+    if (!config?.projectFile) continue;
+    unique.set(config.projectFile, config);
+  }
+  const relative = (file) => path.relative(cwd, file).split(path.sep).join('/');
+  return [...unique.values()]
+    .sort((a, b) =>
+      a.projectFile < b.projectFile ? -1 : a.projectFile > b.projectFile ? 1 : 0,
+    )
+    .map((config) => ({
+      project: relative(config.projectFile),
+      state: config.unknown ? 'unknown' : 'modelled',
+      reason: config.unknown ?? null,
+      claim: 'baseUrl-and-paths-projection',
+      fullConfigurationValidated: false,
+      files: config.configurationFiles.map(relative),
+      unreadParents: config.unreadParents,
+    }));
+}
+
 function projectConfig(fromFile) {
   const chain = [];
   let dir = path.dirname(fromFile);
@@ -1462,15 +1489,111 @@ function projectConfig(fromFile) {
 }
 
 function readTsconfig(file, dir) {
+  const active = new Set();
+  const configurationFiles = [];
+  const unreadParents = [];
+  const maxConfigBytes = 4 * 1024 * 1024;
+  let bytes = 0;
+  const fail = (reason) => {
+    throw new Error(reason);
+  };
+  const object = (value) =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const read = (filename) => {
+    if (configurationFiles.length >= 16) fail('config-file-budget');
+    let physical;
+    let raw;
+    try {
+      physical = fs.realpathSync(filename);
+      if (active.has(physical)) fail('config-cycle');
+      if (fs.statSync(filename).size > maxConfigBytes - bytes) fail('config-byte-budget');
+      raw = fs.readFileSync(filename, 'utf8');
+    } catch (error) {
+      fail(error.code ? 'config-unreadable' : error.message);
+    }
+    bytes += Buffer.byteLength(raw);
+    if (bytes > maxConfigBytes) fail('config-byte-budget');
+    configurationFiles.push(filename);
+    active.add(physical);
+    try {
+      let config;
+      try {
+        config = JSON.parse(stripJsonc(raw));
+      } catch {
+        fail('config-invalid-jsonc');
+      }
+      if (
+        !object(config) ||
+        ('compilerOptions' in config && !object(config.compilerOptions))
+      )
+        fail('config-invalid-shape');
+      const options = config.compilerOptions ?? {};
+      const origin = path.dirname(filename);
+      let inherited = { baseUrl: null, paths: {}, pathsOrigin: null };
+      if (config.extends !== undefined) {
+        if (typeof config.extends === 'string' && config.extends.startsWith('.')) {
+          const base = path.resolve(origin, config.extends);
+          inherited = read(fs.existsSync(base) ? base : `${base}.json`);
+        } else if (typeof options.baseUrl === 'string' && object(options.paths)) {
+          // Both relevant options are locally replaced. The parent is not needed
+          // for this projection; its other options remain explicitly unvalidated.
+          unreadParents.push({
+            extends: config.extends,
+            reason: 'local-projection-overrides-parent',
+          });
+        } else fail('config-unsupported-extends');
+      }
+      if (Object.hasOwn(options, 'baseUrl')) {
+        if (typeof options.baseUrl !== 'string') fail('config-invalid-baseUrl');
+        const baseUrl = path.resolve(origin, options.baseUrl);
+        if (
+          Object.keys(inherited.paths).length &&
+          !Object.hasOwn(options, 'paths') &&
+          baseUrl !== inherited.baseUrl
+        )
+          fail('config-inherited-paths-base-override');
+        inherited = { ...inherited, baseUrl };
+      }
+      if (Object.hasOwn(options, 'paths')) {
+        if (!object(options.paths)) fail('config-invalid-paths');
+        for (const [pattern, targets] of Object.entries(options.paths)) {
+          if (
+            (pattern.match(/\*/g) ?? []).length > 1 ||
+            !Array.isArray(targets) ||
+            targets.length === 0 ||
+            targets.some(
+              (target) =>
+                typeof target !== 'string' || (target.match(/\*/g) ?? []).length > 1,
+            )
+          )
+            fail('config-invalid-paths');
+        }
+        // TypeScript replaces the paths object; it does not merge parent keys.
+        inherited = { ...inherited, paths: options.paths, pathsOrigin: origin };
+      }
+      return inherited;
+    } finally {
+      active.delete(physical);
+    }
+  };
   try {
-    const co =
-      JSON.parse(stripJsonc(fs.readFileSync(file, 'utf8'))).compilerOptions ?? {};
+    const projected = read(path.resolve(file));
     return {
-      baseDir: co.baseUrl ? path.resolve(dir, co.baseUrl) : dir,
-      paths: co.paths ?? {},
+      baseDir: projected.baseUrl ?? projected.pathsOrigin ?? dir,
+      paths: projected.paths,
+      projectFile: file,
+      configurationFiles,
+      unreadParents,
     };
-  } catch {
-    return { baseDir: dir, paths: {} };
+  } catch (error) {
+    return {
+      baseDir: dir,
+      paths: {},
+      projectFile: file,
+      configurationFiles,
+      unreadParents,
+      unknown: error.message,
+    };
   }
 }
 
@@ -1503,24 +1626,49 @@ function stripJsonc(src) {
     } else if (c === '/' && n === '*') {
       i += 2;
       while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      if (i >= src.length) throw new Error('unterminated-comment');
+      out += ' '; // comments separate tokens; they must never concatenate them
       i++; // land on '/', loop's i++ steps past it
     } else {
       out += c;
     }
   }
   // trailing commas: `,}` / `,]` (whitespace between) — invalid JSON, valid JSONC
-  return out.replace(/,(\s*[}\]])/g, '$1');
+  let cleaned = '';
+  inStr = false;
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i];
+    if (inStr) {
+      cleaned += c;
+      if (c === '\\') cleaned += out[++i] ?? '';
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    if (c === ',') {
+      let next = i + 1;
+      while (next < out.length && /\s/.test(out[next])) next++;
+      if (out[next] === '}' || out[next] === ']') continue;
+    }
+    cleaned += c;
+  }
+  return cleaned;
 }
 
 function resolveAliasedImport(fromFile, spec) {
   const cfg = projectConfig(fromFile);
-  if (!cfg) return null;
+  if (!cfg || cfg.unknown) return null;
   const candidates = [];
+  let selected = null;
+  let selectedPrefix = -1;
   // explicit tsconfig `paths` (e.g. "@app/*": ["src/app/*"])
   for (const [pattern, targets] of Object.entries(cfg.paths)) {
     const star = pattern.indexOf('*');
     if (star === -1) {
-      if (pattern === spec) for (const t of targets) candidates.push(t);
+      if (pattern === spec) {
+        selected = { targets, mid: null };
+        break;
+      }
       continue;
     }
     const pre = pattern.slice(0, star);
@@ -1530,10 +1678,15 @@ function resolveAliasedImport(fromFile, spec) {
       spec.endsWith(post) &&
       spec.length >= pre.length + post.length
     ) {
-      const mid = spec.slice(pre.length, spec.length - post.length);
-      for (const t of targets) candidates.push(t.replace('*', mid));
+      if (pre.length > selectedPrefix) {
+        selectedPrefix = pre.length;
+        selected = { targets, mid: spec.slice(pre.length, spec.length - post.length) };
+      }
     }
   }
+  if (selected)
+    for (const target of selected.targets)
+      candidates.push(selected.mid === null ? target : target.replace('*', selected.mid));
   // implicit baseUrl resolution + the near-universal `src/` root fallback, so the
   // common `baseUrl:"."` + `"src/*":["src/*"]` config works even if paths is absent.
   const bases = candidates
@@ -1746,6 +1899,8 @@ export function scanFunction(fnNode, env = {}) {
     async: Boolean(fnNode?.async),
   };
   if (!fnNode) return result;
+  const admission = sessionAdmission(fnNode);
+  if (admission) result.sessionAdmission = admission;
   visit(fnNode.body, result, {
     tx: null,
     isolation: 'default',
@@ -1767,6 +1922,7 @@ export function scanFunction(fnNode, env = {}) {
     collections: env.collections ?? null,
     // nested helpers of THIS body — a filter document is often produced by one
     nestedFns: localFunctions(fnNode),
+    localReturnPaths: localReturnPaths(fnNode),
     // TypeORM repository provenance: class-injected repo fields (env.repoFields, from the owning
     // class) merged with local `getRepository(Entity)` vars found in THIS body → receiver → table.
     repoTables: mergeRepoTables(env.repoFields, collectRepoVars(fnNode)),
@@ -2413,6 +2569,30 @@ function walkRoleDestinations(
     return;
   }
   // `{ _id: parseInt(userId) }` — the transform is recorded and the walk continues
+  if (
+    node.type === 'CallExpression' &&
+    node.callee?.type === 'Identifier' &&
+    node.arguments.length === 0
+  ) {
+    const alternatives = ctx.localReturnPaths?.get(node.callee.name);
+    if (alternatives) {
+      for (const expression of alternatives)
+        walkRoleDestinations(expression, role, ctx, prefix, out, fuel, depth + 1, [
+          ...transforms,
+          `${node.callee.name}().return@${expression.loc?.start.line ?? '?'}`,
+        ]);
+      return;
+    }
+  }
+  if (node.type === 'TemplateLiteral') {
+    for (const expression of node.expressions)
+      walkRoleDestinations(expression, role, ctx, prefix, out, fuel, depth + 1, [
+        ...transforms,
+        'template-interpolation',
+      ]);
+    return;
+  }
+  // The transform is recorded and the walk continues
   // into its single argument. The destination does not move: the value still lands
   // at this key, it simply crossed a converter on the way, and hiding that would
   // describe a value that arrived untouched.
@@ -3548,6 +3728,11 @@ function opaqueDynamicWrite(node, out, ctx, callee, line) {
 // and the effect-bias inversion says treat it as a write rather than lose it. Bounded walk.
 function handleInSubtree(node, handles, budget = { n: 400 }) {
   if (!node || typeof node !== 'object' || budget.n-- <= 0) return null;
+  // TypeScript types are erased: an imported Prisma model named in a cast is
+  // not a runtime persistence receiver. Assertion/non-null/satisfies wrappers
+  // still carry their real expression, which may itself be a database handle.
+  if (node.type?.startsWith('TS'))
+    return handleInSubtree(node.expression, handles, budget);
   if (Array.isArray(node)) {
     for (const n of node) {
       const hit = handleInSubtree(n, handles, budget);
