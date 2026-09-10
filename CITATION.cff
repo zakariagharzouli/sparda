@@ -1,0 +1,29 @@
+# Métadonnées de citation, lues par GitHub (bouton « Cite this repository »),
+# par Zenodo et par les gestionnaires de références.
+#
+# C'est le seul endroit du dépôt qui attribue explicitement la paternité de
+# SPARDA à une personne nommée : package.json ne porte que l'organisation.
+cff-version: 1.2.0
+message: "Si vous utilisez SPARDA dans un travail publié, merci de le citer ainsi."
+title: SPARDA
+abstract: >-
+  The trust layer for AI-written code. SPARDA compiles a backend — routes,
+  database queries, state mutations, guards, side-effects — into one
+  deterministic behavior graph, then statically proves what can and cannot
+  break before shipping: no unguarded mutation, no removed authorization
+  guard, no broken invariant. Deterministic, offline, no API key.
+type: software
+authors:
+  - family-names: Gharzouli
+    given-names: Zakaria
+    affiliation: Residual Labs
+    website: "https://residual-labs.fr/about"
+repository-code: "https://github.com/zakariagharzouli/sparda"
+url: "https://residual-labs.fr"
+license: BUSL-1.1
+keywords:
+  - static-analysis
+  - program-verification
+  - ai-generated-code
+  - model-context-protocol
+  - authorization
