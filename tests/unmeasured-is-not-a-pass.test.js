@@ -1,4 +1,5 @@
 // unmeasured-is-not-a-pass.test.js — the family check for SPARDA's oldest rule, mechanized.
+import { identityRiskFindings } from '../src/ubg/identity-risk.js';
 //
 // THE RULE (SOUNDNESS §7): "we could not measure" and "we measured nothing wrong" are
 // different states, everywhere, always.
@@ -58,6 +59,65 @@ import { verdictOf, verdictState } from '../src/ubg/apocalypse.js';
 import { publishedCheck } from '../scripts/release-checks.mjs';
 import { presentationOf } from './helpers/vscode-lib.js';
 import { summarize } from '../bench/soundness/run.mjs';
+import { checkAuthorizationPolicy } from '../src/ubg/authorization-policy.js';
+import { checkAuthorizationLogic } from '../src/ubg/authorization-logic.js';
+import { checkSourceAuthorization } from '../src/ubg/source-authorization.js';
+import { checkGraph } from '../src/ubg/apocalypse.js';
+
+describe('Boolean model uncertainty', () => {
+  it('expresses and reaches unknown source authorization through compilation', () => {
+    expect(checkSourceAuthorization('.', {}, {}, null)).toMatchObject({
+      modelSatisfiable: null,
+      conditionExtracted: null,
+      authorizationViolation: null,
+    });
+    const result = compileUBG(path.join(here, 'fixtures', 'ubg-app-alias'), {
+      write: false,
+      sourceAuthorizationPolicy: {},
+    });
+    expect(result.report.sourceAuthorization).toMatchObject({
+      modelSatisfiable: null,
+      conditionExtracted: null,
+      authorizationViolation: null,
+    });
+  });
+  it('expresses an unavailable satisfiability claim', () => {
+    expect(checkAuthorizationLogic({}, null)).toMatchObject({
+      modelSatisfiable: null,
+      certificateVerified: null,
+      authorizationViolation: null,
+    });
+  });
+  it('reaches unavailable claims through checkGraph', () => {
+    expect(
+      checkGraph({ nodes: [], edges: [] }, { authorizationModel: null })
+        .authorizationLogic,
+    ).toMatchObject({
+      status: 'UNKNOWN',
+      modelSatisfiable: null,
+      certificateVerified: null,
+      authorizationViolation: null,
+    });
+  });
+});
+
+describe('explicit authorization policy uncertainty', () => {
+  it('expresses unknown without an invented zero violations', () => {
+    const result = checkAuthorizationPolicy({}, {}, null);
+    expect(result.status).toBe('unknown');
+    expect(result.violations).toBeNull();
+    expect(result.runtimeViolation).toBeNull();
+  });
+  it('reaches unknown through the actual compiler option', () => {
+    const result = compileUBG(path.join(here, 'fixtures', 'ubg-app-alias'), {
+      write: false,
+      authorizationPolicy: {},
+    });
+    expect(result.report.authorizationPolicy.status).toBe('unknown');
+    expect(result.report.authorizationPolicy.violations).toBeNull();
+    expect(result.report.authorizationPolicy.automaticDetection).toBe(false);
+  });
+});
 
 // A minimal graph with one entrypoint and one guarded mutation — enough for the verdict
 // machinery to have something to grade, so the rungs below are the only thing under test.
@@ -628,5 +688,54 @@ describe('the strict Nest chain: an unproved link makes the RECEIPT null, never 
       expect(d.detail).toBeTruthy();
       expect(d.provenance.uncertainty).toBe('unresolved-provider');
     }
+  });
+});
+describe('identity risk is not a confirmed authorization violation', () => {
+  it('EXPRESSIBLE: no risk evidence invents a confirmed result', () => {
+    expect(identityRiskFindings({ meta: {} }, [], [])).toEqual([]);
+    const claim = { authorizationViolation: null, exploitability: null };
+    expect(claim.authorizationViolation).toBeNull();
+    expect(claim.exploitability).toBeNull();
+  });
+  it('REACHABLE: a real automatic alert retains null confirmation', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const { checkGraph } = await import('../src/ubg/apocalypse.js');
+    const result = compileUBG(
+      fileURLToPath(new URL('./fixtures/identity-risk', import.meta.url)),
+      { write: false },
+    );
+    const alert = checkGraph(JSON.parse(result.json)).findings.find(
+      (f) => f.rule === 'CLIENT_SELECTED_IDENTITY',
+    );
+    expect(alert).toMatchObject({
+      classification: 'risk-candidate',
+      authorizationViolation: null,
+      exploitability: null,
+    });
+  });
+});
+
+describe('Python source authorization preserves uncertainty', () => {
+  it('EXPRESSIBLE and REACHABLE: unsupported Python policy never grades as a pass', async () => {
+    const { compileUBG } = await import('../src/ubg/compile.js');
+    const root = fileURLToPath(new URL('./fixtures/fastapi-basic', import.meta.url));
+    const first = compileUBG(root, { write: false });
+    const graph = JSON.parse(first.json);
+    const entrypoint = graph.nodes.find((n) => n.kind === 'entrypoint').id;
+    const policy = {
+      schema: 'sparda-source-authorization/v1',
+      basis: 'Explicit test policy with unsupported dynamic authorization.',
+      sourceHash: graph.meta.sourceHash,
+      rules: [{ entrypoint, allowed: 'dynamic.permission' }],
+    };
+    const report = compileUBG(root, { write: false, sourceAuthorizationPolicy: policy })
+      .report.sourceAuthorization;
+    expect(report).toMatchObject({
+      status: 'UNKNOWN',
+      modelSatisfiable: null,
+      conditionExtracted: null,
+      authorizationViolation: null,
+      productionEligible: false,
+    });
   });
 });

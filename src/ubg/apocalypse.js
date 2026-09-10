@@ -13,6 +13,8 @@
 
 import { cmp } from './schema.js';
 import { buildCfIndex, reachFrom } from './reach.js';
+import { identityRiskFindings } from './identity-risk.js';
+import { checkAuthorizationLogic } from './authorization-logic.js';
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, info: 3 };
 const CONSTRAINING = new Set(['check', 'not_null', 'unique']);
@@ -156,7 +158,7 @@ function assertedOnlyMutations(graph) {
 // static obligations
 // ---------------------------------------------------------------------------
 
-export function checkGraph(graph) {
+export function checkGraph(graph, options = {}) {
   const g = indexGraph(graph);
   const findings = [];
   let obligations = 0;
@@ -176,6 +178,9 @@ export function checkGraph(graph) {
     const reached = [...reach].sort().map((id) => g.nodes.get(id));
     const guards = reached.filter((n) => n?.kind === 'guard');
     const writes = []; // { effect, stateId }
+    const identityRisks = identityRiskFindings(ep, reached.filter(Boolean), graph.edges);
+    findings.push(...identityRisks);
+    obligations += identityRisks.length;
     for (const n of reached) {
       if (n?.kind !== 'effect') continue;
       const outs = g.mutOut.get(n.id) ?? [];
@@ -601,7 +606,13 @@ export function checkGraph(graph) {
   // suppresses uniform light, never an edge.
   const collapsed = collapseFloods(findings, g.entrypoints.length);
 
-  return { findings: sortFindings(collapsed), obligations, polarity };
+  const result = { findings: sortFindings(collapsed), obligations, polarity };
+  if (Object.hasOwn(options, 'authorizationModel'))
+    result.authorizationLogic = checkAuthorizationLogic(
+      graph,
+      options.authorizationModel,
+    );
+  return result;
 }
 
 // A rule is "pervasive" when it fires on more than this fraction of the routes AND on at least

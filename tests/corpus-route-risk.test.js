@@ -386,7 +386,7 @@ describe('TAPP-1 access paths are pinned in the same commit that produces them',
     // print "0 drifted" the day the interprocedural seam stopped resolving — the
     // #47 failure one capability later, and the reason a count is never enough.
     expect(snapshot.nodegoat, 'nodegoat must stay in the corpus').toBeDefined();
-    expect(snapshot.nodegoat.dataFlowPaths.resolved).toBe(4);
+    expect(snapshot.nodegoat.dataFlowPaths.resolved).toBe(7);
     const resolved = snapshot.nodegoat.dataFlowPaths.paths.filter(
       (p) => !p.includes('UNKNOWN_ACCESS_PATH'),
     );
@@ -400,6 +400,15 @@ describe('TAPP-1 access paths are pinned in the same commit that produces them',
     );
     expect(resolved).toContain(
       'entrypoint:POST /benefits data req.body.benefitStartDate → benefitStartDate → BenefitsDAO.updateBenefits(#1) → startDate → data.$set.benefitStartDate',
+    );
+    expect(resolved).toContain(
+      'entrypoint:GET /allocations/:userId filter req.params.userId → userId → AllocationsDAO.getByUserIdAndThreshold(#0) → userId → parseInt() → parsedUserId → searchCriteria().return@81 → filter.userId',
+    );
+    expect(resolved).toContain(
+      'entrypoint:GET /allocations/:userId filter req.params.userId → userId → AllocationsDAO.getByUserIdAndThreshold(#0) → userId → parseInt() → parsedUserId → searchCriteria().return@77 → template-interpolation → filter.$where',
+    );
+    expect(resolved).toContain(
+      'entrypoint:GET /allocations/:userId filter req.query.threshold → threshold → AllocationsDAO.getByUserIdAndThreshold(#1) → threshold → searchCriteria().return@77 → template-interpolation → filter.$where',
     );
   });
 });

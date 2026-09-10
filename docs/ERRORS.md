@@ -2791,3 +2791,82 @@ by the oracle, and conflating the two is what produced this entry.
   asks whether every README target exists in the future public tree and never inspects dependencies.
 - **Rule:** **an oracle for a staged artifact must consume the staged namespace.** A convenient
   working directory is not the product and creates platform-dependent evidence.
+
+## E-125 — reused function roles do not identify middleware registration
+
+- **Symptom:** the first identity-risk prototype missed ordinary function middleware
+  when its UBG node had already been created as a helper with role `function`.
+- **Root cause:** it selected middleware by a reusable node role instead of the
+  route's registration edges; constructor-owned middleware happened to work.
+- **Fix:** retain session-admission metadata on helper and registration nodes and
+  use ordered route registration edges. End-to-end tests cover both function and
+  constructor-owned middleware; separate mutation guardians cover both hooks.
+- **Rule:** invocation position belongs to the registration relation, not a shared
+  function's first translation role.
+
+## E-126 — a repeated Tree-sitter subscript field was read as one key
+
+- **Symptom:** the first registration-constant resolver could read ROUTES["a", "b"]
+  as ROUTES["a"], inventing a route where Python uses a tuple key.
+- **Cause:** field(node, "subscript") selected the first named child without checking
+  field multiplicity. The syntax tree retains both indices.
+- **Fix:** require exactly one subscript field; tuple/computed keys remain UNKNOWN.
+  A regression case and a killing mutation guard this arity condition.
+- **Rule:** a first-child helper does not establish scalar syntax; validate arity
+  before interpreting repeated fields. No runtime execution is needed to catch it.
+
+## E-127 — a SQLAlchemy model name was reported as a physical table
+
+- **Symptom:** insert(Item)/select(Item) produced table item although the fixture
+  defines only class Item: pass, with no physical table declaration.
+- **Cause:** sa_builder_effect lowercased the class identifier without resolving
+  the model or checking the builder's import provenance.
+- **Fix:** module-aware scans resolve declared table names and import aliases.
+  Missing targets remain null/opaque, model files enter the source hash, and local
+  shadowing/rebinding prevents invented bindings. No old fixture was repaired to
+  manufacture a table.
+- **Rule:** a model identifier is provenance, not a schema fact.
+
+## E-128 — a valid certificate does not validate a disagreeing solver headline
+
+- **Found during local prototype review:** the adapter verified the certificate but
+  initially selected its headline from the separate solver status. A faulty solver
+  could provide a valid SAT certificate while labeling the result UNSAT.
+- **Fix before commit:** require exact status agreement as well as independent
+  certificate verification. An injected-fault test and killing mutant cover this.
+- **Rule:** certificate validity must guard the precise claim the consumer publishes.
+
+## E-129 — sparse policy arrays vacuously satisfied an aggregate check
+
+- **Found before commit:** Array.map/some/every skip holes. A sparse rules array
+  could produce no checks while reporting MEASURED and no model counterexample.
+- **Fix:** Array.from visits missing entries; each becomes an explicit UNKNOWN
+  rule. The aggregate cannot report a complete measurement when any rule is unknown.
+- **Guardian:** a sparse-array regression and a mutation restoring the old map.
+- **Rule:** a nonzero array length is not evidence that every item was checked.
+
+## E-130 — erased TypeScript types manufactured opaque persistence writes
+
+handleInSubtree traversed a TSAsExpression's typeAnnotation. An imported Prisma
+Tag was mistaken for a runtime handle in an array cast; map then became an opaque
+database write. Ghostfolio public portfolio acquired a critical authorization alert.
+Skip TS metadata while retaining each wrapper's expression. Never drop the real
+receiver: (db as Tag)[op]() still produces an opaque write, and callback writes
+remain visited. Fourteen tests and two killing mutations guard both directions.
+
+The first integration test passed a mutable graph Map to checkGraph, which expects
+canonical arrays; corrected the test adapter before using its result. A finally
+cleanup throw triggered lint; moved the path guard to a cleanup helper and rechecked.
+
+## E-131 — FastAPI completion and Security origin need their own semantics
+
+A dependency returning False or None does not deny a FastAPI request. The Python
+admission projector therefore treats return and fall-through as completion, and
+only admitted HTTP 401/403 raises as refusal. Dedicated tests and mutants distinguish
+this from Express next() behavior. Reusing a local function named Security as a
+framework registration would credit a false guard; source import/shadow checks
+now gate the new Security support and declare unknown bindings.
+
+The first graph-order mutation survived because corrupting one edge also changed
+sort order and triggered another guard. Shift all ordinals equally to isolate the
+contiguity check; the guardian then kills exactly that missing admission.

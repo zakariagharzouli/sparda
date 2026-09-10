@@ -4,7 +4,7 @@
 // the only inputs are the bytes of the source tree, the only output is the
 // graph plus an honest report of everything the static eye could NOT see.
 import { detectStack } from '../detect.js';
-import { clearModuleCache } from './extract.js';
+import { clearModuleCache, configurationResolution } from './extract.js';
 import { extractExpress } from './express.js';
 import { extractNest } from './nestjs.js';
 import { extractMedusa } from './medusa.js';
@@ -25,10 +25,21 @@ import { createLedger, certifyKernelConservation, ledgerFacts } from './kernel/f
 import { liftKernelFacts } from './kernel/lift.js';
 import { attachBoundaries } from './kernel/attach.js';
 import { CONTRACTS } from './kernel/contracts.js';
+import { checkAuthorizationPolicy } from './authorization-policy.js';
+import { attachIdentityRiskEvidence } from './identity-risk.js';
+import { checkSourceAuthorization } from './source-authorization.js';
 
 export function compileUBG(
   cwd,
-  { write = true, out = null, optimizePasses = true, openapi = null, budgetMs } = {},
+  {
+    write = true,
+    out = null,
+    optimizePasses = true,
+    openapi = null,
+    budgetMs,
+    authorizationPolicy,
+    sourceAuthorizationPolicy,
+  } = {},
 ) {
   clearModuleCache(); // each compile run parses fresh — no stale-file ghosts
 
@@ -133,18 +144,21 @@ export function compileUBG(
     after: lifted.facts,
   });
 
+  const compilationFiles = [
+    ...extracted.scannedFiles,
+    ...tables.map((t) => t.sourceFile),
+    ...configurationResolution(cwd).flatMap((configuration) => configuration.files),
+  ];
   graph.meta = {
     ...graph.meta,
     framework: stack.framework,
     entry: stack.entryFile,
-    sourceHash: sourceHashOf(cwd, [
-      ...extracted.scannedFiles,
-      ...tables.map((t) => t.sourceFile),
-    ]),
+    sourceHash: sourceHashOf(cwd, compilationFiles),
     semanticCoverage: semanticCoverage.coverage,
     detection: stack.detection,
   };
 
+  attachIdentityRiskEvidence(graph, lifted.facts);
   const structuralSkips = semanticCoverage.unmeasured
     .map((fact) => semanticCoverage.unmeasuredMeta.get(fact.id))
     .filter((fact) => fact?.origin === 'route')
@@ -156,6 +170,7 @@ export function compileUBG(
     }));
 
   const report = {
+    configurationResolution: configurationResolution(cwd),
     framework: stack.framework,
     entry: stack.entryFile,
     detection: stack.detection,
@@ -218,6 +233,22 @@ export function compileUBG(
     counts: countGraph(graph),
   };
 
+  if (authorizationPolicy !== undefined) {
+    report.authorizationPolicy = checkAuthorizationPolicy(
+      canonicalizeGraph(graph),
+      report,
+      authorizationPolicy,
+    );
+  }
+  if (sourceAuthorizationPolicy !== undefined)
+    report.sourceAuthorization = checkSourceAuthorization(
+      cwd,
+      canonicalizeGraph(graph),
+      extracted,
+      sourceAuthorizationPolicy,
+      compilationFiles,
+      stack.pythonCmd,
+    );
   const outPath = write ? writeGraph(graph, cwd, out) : null;
   return { graph, json: serializeGraph(graph), report, outPath };
 }

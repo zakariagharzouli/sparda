@@ -9,6 +9,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.73.0] - 2026-09-10
+
+### Added
+
+- Optional bounded Boolean authorization models with deterministic counterexample
+  search and independently verified certificates. Express middleware and supported
+  FastAPI dependencies can supply source-bound handler-entry conditions. Access
+  policies remain explicit; application authorization violations remain unknown.
+- Automatic client-selected identity risk alerts with source evidence. Both pinned
+  NodeGoat benchmark routes are detected; these are alerts, not proven exploits.
+- Independent experimental Tree-sitter Python frontend differential and explicit
+  uncertainty for unresolved routes, dependency semantics and SQLAlchemy targets.
+
+### Fixed
+
+- Resolve inherited local TypeScript configuration paths with bounded provenance.
+- Preserve supported constant FastAPI routes; avoid inventing SQLAlchemy tables.
+- Recognize Security dependency registrations alongside Depends in Python lowering.
+- Exclude erased TypeScript type annotations from runtime persistence provenance,
+  removing a spurious Ghostfolio public-portfolio critical finding.
+
+### Limitations
+
+- Complex dependency factories, async side effects, router/global registration
+  semantics and handler-to-sensitive-effect authorization proofs remain unmeasured.
+- Corpus baselines describe observed analysis, including documented conservative
+  transaction/public-cache alerts; a green regression gate is not application safety.
+
 ## [0.72.1] - 2026-09-04
 
 ### Fixed

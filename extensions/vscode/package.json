@@ -2,7 +2,7 @@
   "name": "sparda",
   "displayName": "SPARDA — prove AI-written code",
   "description": "The trust layer for AI-written code. AI writes, SPARDA proves. Deterministic, offline behavior proofs + a live gate for AI edits, right in the editor.",
-  "version": "0.72.1",
+  "version": "0.73.0",
   "icon": "logo.png",
   "publisher": "zyx77550",
   "license": "BUSL-1.1",
@@ -92,22 +92,34 @@
             "id": "install",
             "title": "Install the engine",
             "description": "This extension ships no engine — it is a thin bridge over the `sparda-mcp` CLI, so its verdict can never drift from the CLI's. Install it into your workspace and the extension picks it up.\n[Install sparda-mcp](command:sparda.install)",
-            "media": { "markdown": "walkthrough/install.md" },
-            "completionEvents": ["onCommand:sparda.install"]
+            "media": {
+              "markdown": "walkthrough/install.md"
+            },
+            "completionEvents": [
+              "onCommand:sparda.install"
+            ]
           },
           {
             "id": "prove",
             "title": "Get a verdict",
             "description": "SPARDA compiles your routes into a behavior graph and reports what it can and cannot prove. The status bar carries the verdict; an analysis that did not run reads UNKNOWN, never green.\n[Prove workspace](command:sparda.prove)",
-            "media": { "markdown": "walkthrough/prove.md" },
-            "completionEvents": ["onCommand:sparda.prove"]
+            "media": {
+              "markdown": "walkthrough/prove.md"
+            },
+            "completionEvents": [
+              "onCommand:sparda.prove"
+            ]
           },
           {
             "id": "arm",
             "title": "Arm the gate",
             "description": "Freeze the current behavior as the accepted baseline. From then on, every edit — yours or an agent's — is proven against it, and a removed guard is caught in the loop rather than in review.\n[Arm the baseline](command:sparda.gate.arm)",
-            "media": { "markdown": "walkthrough/arm.md" },
-            "completionEvents": ["onCommand:sparda.gate.arm"]
+            "media": {
+              "markdown": "walkthrough/arm.md"
+            },
+            "completionEvents": [
+              "onCommand:sparda.gate.arm"
+            ]
           }
         ]
       }
