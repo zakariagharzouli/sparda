@@ -1,7 +1,7 @@
 # SPARDA
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/zakariagharzouli/sparda/439617e44c22c6bd625a507e19c3deb1f75dbb92/assets/sparda-readme-banner-dark-1600x480.png" alt="SPARDA — AI writes. SPARDA proves." width="800" />
+  <img src="https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/01-overview.png" alt="SPARDA compiles backend behavior, checks proof obligations and gates regressions" width="800" />
 </div>
 
 <br/>
@@ -43,11 +43,12 @@ The technical series covers compilation, proof scope and request replay. The rec
 
 | Illustration | Illustration |
 | --- | --- |
-| ![Compilation, proof obligations and regression checks](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/01-overview.png) | ![Illustrative authorization regression](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/02-problem.png) |
-| ![Supported inputs compiled into a behavior graph](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/03-compiler.png) | ![Anatomy of a behavior graph](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/04-ubg.png) |
-| ![Reference and edited behavior graphs compared](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/05-agent-gate.png) | ![Five static proof obligations](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/06-apocalypse.png) |
-| ![Proof verdicts and verified scope](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/07-verdicts.png) | ![Request replay and fix verification](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/08-timeless-heal.png) |
-| ![Behavior graph outputs and optional MCP runtime](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/09-runtime.png) | ![Recorded route-compilation counts for Dub, Immich and Medusa](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/10-benchmark.png) |
+| ![Illustrative authorization regression](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/02-problem.png) | ![Supported inputs compiled into a behavior graph](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/03-compiler.png) |
+| ![Anatomy of a behavior graph](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/04-ubg.png) | ![Reference and edited behavior graphs compared](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/05-agent-gate.png) |
+| ![Five static proof obligations](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/06-apocalypse.png) | ![Proof verdicts and verified scope](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/07-verdicts.png) |
+| ![Request replay and fix verification](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/08-timeless-heal.png) | ![Behavior graph outputs and optional MCP runtime](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/09-runtime.png) |
+
+![Recorded route-compilation counts for Dub, Immich and Medusa](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/10-benchmark.png)
 
 ## The wedge — catch an AI edit that removes a guard, in the loop
 
@@ -272,12 +273,6 @@ To undo everything: **`npx sparda-mcp remove`** restores your code byte-for-byte
 
 ## The promise — every word is backed by a test in CI
 
-<div align="center">
-  <img src="assets/features-presentation.png" alt="SPARDA Features" width="800" />
-</div>
-
-<br/>
-
 1. **Three minutes, one command.** AST scan, router generation, reversible injection — no config.
 2. **Try it for free, leave for free.** `npx sparda-mcp remove` restores your code **byte-for-byte** (tested on JS, TS, Python, even Windows CRLF files). No trace, no lock-in.
 3. **The AI cannot write until you say so.** Every POST/PUT/DELETE is disabled by default; you enable per tool, and your choice survives every re-run.
@@ -384,10 +379,4 @@ crippled to upsell you.
 You may not resell SPARDA or offer it as a competing commercial service.
 Each version converts to Apache 2.0 four years after its release.
 
-<div align="center">
-  <img src="assets/github-star.png" alt="Leave a Star" width="600" />
-</div>
-
-<br/>
-
-By [Residual Labs](https://residual-labs.fr)
+By [Residual Labs](https://residual-labs.fr) · [Star SPARDA on GitHub](https://github.com/zakariagharzouli/sparda)
