@@ -1,7 +1,7 @@
 # SPARDA
 
 <div align="center">
-  <img src="assets/sparda-readme-banner-dark-1600x480.png" alt="SPARDA — AI writes. SPARDA proves." width="800" />
+  <img src="https://raw.githubusercontent.com/zakariagharzouli/sparda/439617e44c22c6bd625a507e19c3deb1f75dbb92/assets/sparda-readme-banner-dark-1600x480.png" alt="SPARDA — AI writes. SPARDA proves." width="800" />
 </div>
 
 <br/>
@@ -23,7 +23,7 @@
 
 100% local · deterministic · zero API key · no cloud account. It fails loudly on a real risk, and when it can only see part of your app it says **PROVEN (PARTIAL)** — never a false green. And when it can prove it was not even looking at your whole app, it says **PREMISE NOT VERIFIED** and claims nothing at all.
 
-[SPARDA visual guide / Présentation illustrée](assets/technical-series/README.md)
+[SPARDA visual guide / Présentation illustrée](https://github.com/zakariagharzouli/sparda/blob/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/README.md) · [View the illustrations below](#sparda-in-pictures)
 
 ## 60-second proof
 
@@ -36,6 +36,18 @@ npx sparda-mcp badge        # a README badge: proven · coverage% · routes
 ```
 
 Under the hood it compiles your backend into one language-agnostic graph — the **Unified Behavior Graph (UBG)**, serialized as `.sparda/ubg.json` under the **SBIR** specification ([SPARDA Behavior IR](docs/SBIR_SPEC_V1.1.md)) — and every command is a pass over that graph.
+
+## SPARDA in pictures
+
+The technical series covers compilation, proof scope and request replay. The recorded benchmark counts compiled routes. The proof verdicts for those repositories are listed separately in the [benchmark data](https://github.com/zakariagharzouli/sparda/blob/main/bench/route-proof.json).
+
+| Illustration | Illustration |
+| --- | --- |
+| ![Compilation, proof obligations and regression checks](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/01-overview.png) | ![Illustrative authorization regression](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/02-problem.png) |
+| ![Supported inputs compiled into a behavior graph](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/03-compiler.png) | ![Anatomy of a behavior graph](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/04-ubg.png) |
+| ![Reference and edited behavior graphs compared](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/05-agent-gate.png) | ![Five static proof obligations](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/06-apocalypse.png) |
+| ![Proof verdicts and verified scope](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/07-verdicts.png) | ![Request replay and fix verification](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/08-timeless-heal.png) |
+| ![Behavior graph outputs and optional MCP runtime](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/09-runtime.png) | ![Recorded route-compilation counts for Dub, Immich and Medusa](https://raw.githubusercontent.com/zakariagharzouli/sparda/55a2e72fe1756e6e1c47a1d4635415f9f5a686b5/assets/technical-series/10-benchmark.png) |
 
 ## The wedge — catch an AI edit that removes a guard, in the loop
 

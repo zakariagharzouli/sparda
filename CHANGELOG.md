@@ -9,6 +9,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.73.1]
+
+### Documentation
+
+- Add the ten-panel SPARDA technical series to the GitHub guide and the npm package README.
+
 ## [0.73.0] - 2026-09-10
 
 ### Added
