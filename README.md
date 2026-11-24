@@ -23,6 +23,8 @@
 
 100% local · deterministic · zero API key · no cloud account. It fails loudly on a real risk, and when it can only see part of your app it says **PROVEN (PARTIAL)** — never a false green. And when it can prove it was not even looking at your whole app, it says **PREMISE NOT VERIFIED** and claims nothing at all.
 
+[SPARDA visual guide / Présentation illustrée](assets/technical-series/README.md)
+
 ## 60-second proof
 
 From your Express, FastAPI, Flask, Next.js, NestJS or Medusa app — nothing to configure:
