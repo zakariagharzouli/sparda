@@ -20,6 +20,7 @@
 ![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 ![runtime deps](https://img.shields.io/badge/runtime%20deps-4%20pinned-4c1)
 [![license](https://img.shields.io/badge/license-BUSL--1.1-blue)](./LICENSE)
+[SPARDA on Glama](https://glama.ai/mcp/servers/zakariagharzouli/sparda)
 
 100% local · deterministic · zero API key · no cloud account. It fails loudly on a real risk, and when it can only see part of your app it says **PROVEN (PARTIAL)** — never a false green. And when it can prove it was not even looking at your whole app, it says **PREMISE NOT VERIFIED** and claims nothing at all.
 
